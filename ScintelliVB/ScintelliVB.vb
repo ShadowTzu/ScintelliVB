@@ -8,9 +8,22 @@ Public Class ScintelliVB
 
     Private keywords_vb As String = "AddHandler AddressOf Alias And AndAlso Ansi Append As Assembly Auto Binary ByRef ByVal Call Case Catch CBool CByte CChar CDate CDbl CInt Class CLng CObj Const Continue CSByte CShort CSng CStr CType CUInt CULng CUShort Declare Default Delegate Dim DirectCast Do Each Else ElseIf End EndIf Enum Erase Error Event Exit False Finally For Friend Function Get GetType GetXMLNamespace Global GoSub GoTo Handles If Implements Imports In Inherits Interface Is IsNot Let Lib Like Loop Me Mod Module MustInherit MustOverride MyBase MyClass Narrowing New Next Not Nothing NotInheritable NotOverridable Of On Operator Option Optional Or OrElse Out Overloads Overridable Overrides ParamArray Partial Private Property Protected Public RaiseEvent ReadOnly ReDim REM RemoveHandler Resume Return Select Set Shadows Shared Static Step Stop Structure Sub SyncLock Then Throw To True Try TryCast TypeOf Using Wend When While Widening With WithEvents WriteOnly Xor #Const #Else #ElseIf #End #If"
     Private keywords_As As String = "Boolean Byte Char Date Decimal Double Integer Long Matrix Object Plane SByte short Single String UInteger ULong UShort Variant Vector2 Vector3"
+    Private Alphabet As String = "abcdefghijklmnopqrstuvwxyz"
+    Private keywords_vb_List() As String
 
+    Private Word_Separator As String = "  ."
+    'Temp variable for test
+    Public Property Text0 As String
+    Public Property Text1 As String
+    Public Property Text2 As String
+    Public Property Text3 As String
+    Public Property Text4 As String
+
+    Private mCanCheckLine As Boolean = True
     Public Sub New(TextArea As Scintilla)
         mTextArea = TextArea
+        keywords_vb_List = Split(keywords_vb & " " & keywords_As, " ")
+
         Init_Handle()
         Config()
     End Sub
@@ -273,7 +286,13 @@ Public Class ScintelliVB
     End Sub
 
     Public Sub CharAdded(sender As Object, e As CharAddedEventArgs)
+        'UpperCase first letter of keywords
+        Replace_Line(mTextArea.CurrentLine, UpperKeyWord(mTextArea.CurrentLine))
 
+        'if return is pressed check previous line
+        If e.Char = 13 Then
+            Replace_Line(mTextArea.CurrentLine - 1, UpperKeyWord(mTextArea.CurrentLine - 1))
+        End If
     End Sub
 
     Public Sub Click(sender As Object, e As EventArgs)
@@ -417,15 +436,21 @@ Public Class ScintelliVB
     End Sub
 
     Public Sub KeyDown(sender As Object, e As KeyEventArgs)
-
+        If e.KeyCode = Keys.Left OrElse e.KeyCode = Keys.Right OrElse e.KeyCode = Keys.Up OrElse e.KeyCode = Keys.Down Then
+            Replace_Line(mTextArea.CurrentLine, UpperKeyWord(mTextArea.CurrentLine))
+        End If
     End Sub
 
     Public Sub KeyPress(sender As Object, e As KeyPressEventArgs)
-
+        'Remove special character
+        'If (AscW(e.KeyChar) < 32 AndAlso AscW(e.KeyChar) > 13 OrElse AscW(e.KeyChar) < 8) Then
+        '    e.Handled = True
+        '    Exit Sub
+        'End If
     End Sub
 
     Public Sub KeyUp(sender As Object, e As KeyEventArgs)
-
+        mCanCheckLine = True
     End Sub
 
     Public Sub Layout(sender As Object, e As LayoutEventArgs)
@@ -602,5 +627,69 @@ Public Class ScintelliVB
 
     Public Sub ZoomChanged(sender As Object, e As EventArgs)
 
+    End Sub
+
+    Private Function UpperKeyWord(Line As Integer) As String
+        Dim Text As String = mTextArea.Lines(Line).Text
+        If String.IsNullOrWhiteSpace(Text) Then Return Text
+
+        Dim Word_Start As Integer = -1
+        Dim Word_End As Integer = -1
+        For i As Integer = 0 To Text.Length - 1
+            'get position of first letter
+            If Word_Start = -1 AndAlso Alphabet.ToLower.Contains(Text(i).ToString.ToLower) Then
+                Word_Start = i
+            End If
+            'get position of last letter
+            If Word_Start > -1 AndAlso Word_End = -1 AndAlso i > Word_Start Then
+
+                'if it's a word separator
+                If Word_Separator.Contains(Text(i)) Then
+                    Word_End = i
+                End If
+
+                'special case
+                If i = Text.Length - 1 Then
+                    Word_End = i - 1
+                End If
+            End If
+
+            'if a word is found
+            If Word_Start > -1 AndAlso Word_End > -1 Then
+
+                'set first letter Uppercase if it's a keyword
+                Dim current_Word As String = Text.Substring(Word_Start, Word_End - Word_Start)
+                If IsKeyWord(current_Word) Then
+                    current_Word = current_Word(0).ToString.ToUpper & current_Word.Substring(1)
+                End If
+
+                'reconstruct text
+                Dim finaltext As String = Text.Substring(0, Word_Start) & current_Word & Text.Substring(Word_End)
+                Text = finaltext
+
+                Word_Start = -1
+                Word_End = -1
+            End If
+        Next
+
+        Return Text
+    End Function
+
+    Private Function IsKeyWord(Word As String) As Boolean
+        For i As Integer = 0 To keywords_vb_List.Count - 1
+            If keywords_vb_List(i).ToLower = Word.ToLower Then Return True
+        Next
+        'If keywords_vb.ToLower.Contains(Word.ToLower) Then Return True
+        'If keywords_As.ToLower.Contains(Word.ToLower) Then Return True
+
+        Return False
+    End Function
+
+    Private Sub Replace_Line(Line As Integer, Text As String)
+        Dim CursorPosition As Integer = mTextArea.CurrentPosition
+        mTextArea.TargetStart = mTextArea.Lines(Line).Position
+        mTextArea.TargetEnd = mTextArea.Lines(Line).EndPosition
+        mTextArea.ReplaceTarget(Text)
+        mTextArea.GotoPosition(CursorPosition)
     End Sub
 End Class
