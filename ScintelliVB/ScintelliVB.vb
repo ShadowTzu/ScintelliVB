@@ -6,12 +6,24 @@ Imports System.Windows.Forms
 Public Class ScintelliVB
     Private mTextArea As Scintilla
 
-    Private keywords_vb As String = "AddHandler AddressOf Alias And AndAlso Ansi Append As Assembly Auto Binary ByRef ByVal Call Case Catch CBool CByte CChar CDate CDbl CInt Class CLng CObj Const Continue CSByte CShort CSng CStr CType CUInt CULng CUShort Declare Default Delegate Dim DirectCast Do Each Else ElseIf End EndIf Enum Erase Error Event Exit False Finally For Friend Function Get GetType GetXMLNamespace Global GoSub GoTo Handles If Implements Imports In Inherits Interface Is IsNot Let Lib Like Loop Me Mod Module MustInherit MustOverride MyBase MyClass Narrowing New Next Not Nothing NotInheritable NotOverridable Of On Operator Option Optional Or OrElse Out Overloads Overridable Overrides ParamArray Partial Private Property Protected Public RaiseEvent ReadOnly ReDim REM RemoveHandler Resume Return Select Set Shadows Shared Static Step Stop Structure Sub SyncLock Then Throw To True Try TryCast TypeOf Using Wend When While Widening With WithEvents WriteOnly Xor #Const #Else #ElseIf #End #If"
-    Private keywords_As As String = "Boolean Byte Char Date Decimal Double Integer Long Matrix Object Plane SByte short Single String UInteger ULong UShort Variant Vector2 Vector3"
-    Private Alphabet As String = "abcdefghijklmnopqrstuvwxyz"
-    Private keywords_vb_List() As String
+    Private mKeywords_vb As String = "AddHandler AddressOf Alias And AndAlso Ansi Append As Assembly Auto Binary ByRef ByVal Call Case Catch CBool CByte CChar CDate CDbl CInt Class CLng CObj Const Continue CSByte CShort CSng CStr CType CUInt CULng CUShort Declare Default Delegate Dim DirectCast Do Each Else ElseIf End EndIf Enum Erase Error Event Exit False Finally For Friend Function Get GetType GetXMLNamespace Global GoSub GoTo Handles If Implements Imports In Inherits Interface Is IsNot Let Lib Like Loop Me Mod Module MustInherit MustOverride MyBase MyClass Narrowing New Next Not Nothing NotInheritable NotOverridable Of On Operator Option Optional Or OrElse Out Overloads Overridable Overrides ParamArray Partial Private Property Protected Public RaiseEvent ReadOnly ReDim REM RemoveHandler Resume Return Select Set Shadows Shared Static Step Stop Structure Sub SyncLock Then Throw To True Try TryCast TypeOf Using Wend When While Widening With WithEvents WriteOnly Xor" ' #Const #Else #ElseIf #End #If (scintilla reject this)
+    Private mKeywords_As As String = "Boolean Byte Char Date Decimal Double Integer Long Object Plane SByte Short Single String UInteger ULong UShort Variant"
+    Private mkeywords_As_Array As String() = Split(mKeywords_As, " ")
+    'Private keywords_As As String() = {"Boolean", "Byte", "Char", "Date", "Decimal", "Double", "Integer", "Long", "Object", "SByte", "Short", "Single", "String", "UInteger", "ULong", "UShort", "Variant"}
 
-    Private Word_Separator As String = "  ."
+    Private mAlphabet As String = "abcdefghijklmnopqrstuvwxyz"
+    Private mKeywords_vb_List() As String = Split(mKeywords_vb & " " & mKeywords_As, " ")
+    Private amKeywords_Complete As String
+
+    Private keywords_Acces As String() = {"Async", "Class", "Const", "Declare", "Default", "Delegate", "Dim", "Enum", "Event", "Friend", "Function", "Interface", "Iterator", "MustInherit", "MustOverride", "Narrowing", "NotInheritable", "NotOverridable", "Operator", "Overloads", "Overridable", "Overrides", "Partial", "Private", "Property", "Protected", "Public", "ReadOnly", "Shadows", "Shared", "Structure", "Sub", "Widening", "WithEvents", "WriteOnly"}
+    Private keywords_OutSide As String() = {"Class", "Delegate", "Enum", "Friend", "Imports", "Interface", "Module", "MustInherit", "Namespace", "NotInheritable", "Partial", "Public", "Shared", "Structure"}
+
+    Private keywords_AccesProperty As String() = {"overloads", "overrides", "readOnly", "writeOnly"}
+    Private keywords_Statement As String() = {"addhandler", "class", "enum", "event", "function", "get", "if", "interface", "module", "namespace", "operator", "property", "raiseevent", "removehandler", "select", "set", "structure", "sub", "synclock", "try", "while", "with"}
+    Private keywords_Modificator As String() = {"ByRef", "Byval", "Optional", "ParamArray"}
+    Private mWord_Separator As Char() = {" "c, "."c, "("c, ")"c, ","c}
+    Private mKeywords_endline As String() = {vbCrLf, vbLf}
+
     'Temp variable for test
     Public Property Text0 As String
     Public Property Text1 As String
@@ -19,10 +31,14 @@ Public Class ScintelliVB
     Public Property Text3 As String
     Public Property Text4 As String
 
-    Private mCanCheckLine As Boolean = True
+    Private AutoC_SelectedItem As String
+    Private AutoC_ValidatedBySpace As Boolean = False
+    Private LastWordsEntered As String()
+    Private KeyWordsSelected As String
+
     Public Sub New(TextArea As Scintilla)
         mTextArea = TextArea
-        keywords_vb_List = Split(keywords_vb & " " & keywords_As, " ")
+        System.Array.Sort(mKeywords_vb_List)
 
         Init_Handle()
         Config()
@@ -130,6 +146,7 @@ Public Class ScintelliVB
     End Sub
 
     Public Sub Config()
+
         mTextArea.WrapMode = ScintillaNET.WrapMode.None
         mTextArea.IndentationGuides = ScintillaNET.IndentView.LookBoth
 
@@ -172,11 +189,12 @@ Public Class ScintelliVB
         mTextArea.TabWidth = 4
         mTextArea.UseTabs = True
         mTextArea.IndentationGuides = IndentView.LookBoth
-        'TextArea.IndentW
+
         mTextArea.Lexer = Lexer.Vb
         mTextArea.LexerLanguage = "vb"
 
-        mTextArea.SetKeywords(0, keywords_vb.ToLower & " " & keywords_As.ToLower)
+        Dim mKeywords_Complete As String = String.Join("?0 ", mKeywords_vb_List)
+        mTextArea.SetKeywords(0, mKeywords_Complete.ToLower.Replace("?0", ""))
 
         mTextArea.Markers(0).Symbol = MarkerSymbol.Background
         mTextArea.Markers(0).SetBackColor(Color.DarkRed)
@@ -204,7 +222,6 @@ Public Class ScintelliVB
         For i As Integer = 25 To 31
             mTextArea.Markers(i).SetForeColor(Color.FromArgb(30, 30, 30))
             mTextArea.Markers(i).SetBackColor(Color.FromArgb(155, 155, 155))
-            '   TextArea.Markers(i).SetAlpha(0)
         Next
         mTextArea.Markers(Marker.Folder).Symbol = MarkerSymbol.BoxPlus
         mTextArea.Markers(Marker.FolderOpen).Symbol = MarkerSymbol.BoxMinus
@@ -215,8 +232,10 @@ Public Class ScintelliVB
         mTextArea.Markers(Marker.FolderTail).Symbol = MarkerSymbol.LCorner
         mTextArea.AutomaticFold = (AutomaticFold.Show Or AutomaticFold.Click Or AutomaticFold.Change)
 
+        mTextArea.EolMode = Eol.CrLf
+        'mTextArea.AutoCSetFillUps(" "c)
         'image AutoComplete
-        'mTextArea.RegisterRgbaImage(0, New Bitmap(App.ImageList_Autocomplete.Images(0)))
+        mTextArea.RegisterRgbaImage(0, My.Resources.keywords)
         'mTextArea.RegisterRgbaImage(1, New Bitmap(App.ImageList_Autocomplete.Images(1)))
 
         mTextArea.Styles(Style.CallTip).BackColor = Color.FromArgb(66, 66, 69)
@@ -225,6 +244,7 @@ Public Class ScintelliVB
         mTextArea.CallTipSetForeHlt(Color.FromArgb(86, 156, 214))
     End Sub
 
+#Region "Unused events"
     Public Sub AutoCCancelled(sender As Object, e As EventArgs)
 
     End Sub
@@ -234,10 +254,6 @@ Public Class ScintelliVB
     End Sub
 
     Public Sub AutoCCompleted(sender As Object, e As AutoCSelectionEventArgs)
-
-    End Sub
-
-    Public Sub AutoCSelection(sender As Object, e As AutoCSelectionEventArgs)
 
     End Sub
 
@@ -283,16 +299,6 @@ Public Class ScintelliVB
 
     Public Sub ChangeUICues(sender As Object, e As UICuesEventArgs)
 
-    End Sub
-
-    Public Sub CharAdded(sender As Object, e As CharAddedEventArgs)
-        'UpperCase first letter of keywords
-        Replace_Line(mTextArea.CurrentLine, UpperKeyWord(mTextArea.CurrentLine))
-
-        'if return is pressed check previous line
-        If e.Char = 13 Then
-            Replace_Line(mTextArea.CurrentLine - 1, UpperKeyWord(mTextArea.CurrentLine - 1))
-        End If
     End Sub
 
     Public Sub Click(sender As Object, e As EventArgs)
@@ -435,22 +441,8 @@ Public Class ScintelliVB
 
     End Sub
 
-    Public Sub KeyDown(sender As Object, e As KeyEventArgs)
-        If e.KeyCode = Keys.Left OrElse e.KeyCode = Keys.Right OrElse e.KeyCode = Keys.Up OrElse e.KeyCode = Keys.Down Then
-            Replace_Line(mTextArea.CurrentLine, UpperKeyWord(mTextArea.CurrentLine))
-        End If
-    End Sub
-
-    Public Sub KeyPress(sender As Object, e As KeyPressEventArgs)
-        'Remove special character
-        'If (AscW(e.KeyChar) < 32 AndAlso AscW(e.KeyChar) > 13 OrElse AscW(e.KeyChar) < 8) Then
-        '    e.Handled = True
-        '    Exit Sub
-        'End If
-    End Sub
-
     Public Sub KeyUp(sender As Object, e As KeyEventArgs)
-        mCanCheckLine = True
+
     End Sub
 
     Public Sub Layout(sender As Object, e As LayoutEventArgs)
@@ -628,6 +620,49 @@ Public Class ScintelliVB
     Public Sub ZoomChanged(sender As Object, e As EventArgs)
 
     End Sub
+#End Region
+
+    Public Sub AutoCSelection(sender As Object, e As AutoCSelectionEventArgs)
+        If LastWordsEntered.Count > 1 AndAlso IsAccesOrDeclarationType() AndAlso AutoC_ValidatedBySpace = True AndAlso e.Text.ToLower <> "as" Then
+            mTextArea.AutoCCancel()
+        End If
+        AutoC_ValidatedBySpace = False
+    End Sub
+
+    Public Sub CharAdded(sender As Object, e As CharAddedEventArgs)
+        IntelliSense(e.Char)
+
+        'UpperCase first letter of keywords
+        Replace_Line(mTextArea.CurrentLine, UpperKeyWord(mTextArea.CurrentLine))
+
+        'if return is pressed check previous line
+        If e.Char = 13 Then
+            Replace_Line(mTextArea.CurrentLine - 1, UpperKeyWord(mTextArea.CurrentLine - 1))
+        End If
+    End Sub
+
+    Public Sub KeyDown(sender As Object, e As KeyEventArgs)
+
+        If mTextArea.AutoCActive = False And e.Modifiers = 0 AndAlso (e.KeyCode = Keys.Left OrElse e.KeyCode = Keys.Right OrElse e.KeyCode = Keys.Up OrElse e.KeyCode = Keys.Down) Then
+            Replace_Line(mTextArea.CurrentLine, UpperKeyWord(mTextArea.CurrentLine))
+            Replace_Line(mTextArea.CurrentLine, CleanText(mTextArea.Lines(mTextArea.CurrentLine).Text))
+        End If
+    End Sub
+
+    Public Sub KeyPress(sender As Object, e As KeyPressEventArgs)
+        'Remove special character
+        'If (AscW(e.KeyChar) < 32 AndAlso AscW(e.KeyChar) > 13 OrElse AscW(e.KeyChar) < 8) Then
+        '    e.Handled = True
+        '    Exit Sub
+        'End If
+
+        'validate intellisense with space
+        If mTextArea.AutoCActive AndAlso e.KeyChar = " "c Then
+
+            AutoC_ValidatedBySpace = True
+            mTextArea.AutoCComplete()
+        End If
+    End Sub
 
     Private Function UpperKeyWord(Line As Integer) As String
         Dim Text As String = mTextArea.Lines(Line).Text
@@ -637,14 +672,14 @@ Public Class ScintelliVB
         Dim Word_End As Integer = -1
         For i As Integer = 0 To Text.Length - 1
             'get position of first letter
-            If Word_Start = -1 AndAlso Alphabet.ToLower.Contains(Text(i).ToString.ToLower) Then
+            If Word_Start = -1 AndAlso mAlphabet.ToLower.Contains(Text(i).ToString.ToLower) Then
                 Word_Start = i
             End If
             'get position of last letter
             If Word_Start > -1 AndAlso Word_End = -1 AndAlso i > Word_Start Then
 
                 'if it's a word separator
-                If Word_Separator.Contains(Text(i)) Then
+                If mWord_Separator.Contains(Text(i)) Then
                     Word_End = i
                 End If
 
@@ -676,12 +711,9 @@ Public Class ScintelliVB
     End Function
 
     Private Function IsKeyWord(Word As String) As Boolean
-        For i As Integer = 0 To keywords_vb_List.Count - 1
-            If keywords_vb_List(i).ToLower = Word.ToLower Then Return True
+        For i As Integer = 0 To mKeywords_vb_List.Count - 1
+            If mKeywords_vb_List(i).ToLower = Word.ToLower Then Return True
         Next
-        'If keywords_vb.ToLower.Contains(Word.ToLower) Then Return True
-        'If keywords_As.ToLower.Contains(Word.ToLower) Then Return True
-
         Return False
     End Function
 
@@ -692,4 +724,145 @@ Public Class ScintelliVB
         mTextArea.ReplaceTarget(Text)
         mTextArea.GotoPosition(CursorPosition)
     End Sub
+
+    Private Sub IntelliSense(CharAdded As Integer)
+        Dim CurrentPos As Integer = mTextArea.CurrentPosition
+        Dim WordStartPos As Integer = mTextArea.WordStartPosition(CurrentPos, True)
+        Dim LenEntered As Integer = CurrentPos - WordStartPos
+
+        LastWordsEntered = GetLastWordWords(False)
+        KeyWordsSelected = Keywords_Selector(LastWordsEntered, CharAdded)
+        ' If LenEntered > 0 Then
+        If Not String.IsNullOrEmpty(KeyWordsSelected) Then
+            If Not mTextArea.AutoCActive AndAlso Not mTextArea.CallTipActive Then
+                '  If Not IsAccesOrDeclarationType("") Then
+                mTextArea.AutoCShow(LenEntered, KeyWordsSelected)
+                'mTextArea.AutoCShow(LenEntered, mKeywords_Complete)
+                '  End If       
+            ElseIf mTextArea.AutoCActive AndAlso LastWordsEntered(0).ToLower.Contains("(") AndAlso Not mTextArea.CallTipActive Then
+                'If LastWords(0).ToLower.Contains("(")
+                mTextArea.AutoCShow(LenEntered, KeyWordsSelected)
+            End If
+        End If
+    End Sub
+
+    Private Function Keywords_Selector(LastWords() As String, CharAdded As Integer) As String
+
+        'if nothing written and spacebar pressed use keywords acces
+        If (LastWords Is Nothing OrElse LastWords.Count = 0) Then
+            If (CharAdded = Keys.Space) Then Return String.Join(" ", keywords_Acces)
+            Return ""
+        End If
+
+        'test
+        Text0 = ""
+        For i As Integer = 0 To LastWords.Count - 1
+            Text0 &= LastWords(i) & " "
+        Next
+
+        If ArrayToLower(mkeywords_As_Array).Contains(LastWords(0).ToLower) Then Return ""
+        If LastWords.Count = 1 Then
+            'if there are just a space (count = 0) or current letter written (count = 1) show keywords acces
+            Return String.Join("?0 ", keywords_Acces)
+        End If
+
+        'if as written show keywords 'As'
+        If LastWords(0).ToLower.TrimStart(New Char() {"("c, ")"c, ","c}) = "as" Then Return String.Join("?0 ", mkeywords_As_Array)
+
+        'if it's statement (sub, function class, etc..) intellisense not needed
+        If keywords_Statement.Contains(LastWords(0).ToLower) Then Return ""
+
+
+        If ArrayToLower(keywords_Modificator).Contains(LastWords(0).ToLower.TrimStart(New Char() {"("c, ")"c, ","c})) Then Return ""
+        Dim InBracket As Boolean = False
+        For i As Integer = 0 To LastWords.Count - 1
+            If LastWords(i).ToLower.Contains("(") Then InBracket = True
+            If LastWords(i).ToLower.Contains(")") Then InBracket = False
+        Next
+
+        If InBracket = True Then
+            If LastWords(0) = "(" Then Return String.Join("?0 ", keywords_Modificator)
+            If LastWords(0) = "," Then Return String.Join("?0 ", keywords_Modificator)
+        End If
+
+        Return "As?0"
+    End Function
+
+    Private Function ArrayToLower(Tab As String()) As String()
+        Return String.Join(" ", Tab).ToLower.Split(" "c)
+    End Function
+
+    Private Function IsAccesOrDeclarationType() As Boolean
+        If ArrayToLower(keywords_Acces).Contains(LastWordsEntered(1).ToLower) Then Return True
+        If ArrayToLower(keywords_Modificator).Contains(LastWordsEntered(1).ToLower) Then Return True
+        If LastWordsEntered(0) = "(" OrElse LastWordsEntered(0) = "," Then Return True
+        If LastWordsEntered(1) = "(" OrElse LastWordsEntered(1) = "," Then Return True
+        Return False
+    End Function
+
+    Private Function GetLastWordWords(SkipFirst As Boolean) As String()
+        Dim Words() As String = Nothing
+        Dim pos As Integer = mTextArea.CurrentPosition
+
+        Dim EndLine As Boolean = False
+        Dim tmp As String = ""
+        Dim f As New Char()
+        Dim CurrentWord As String = ""
+
+        While (pos > mTextArea.Lines(mTextArea.CurrentLine).Position)
+            pos -= 1
+            tmp = mTextArea.Text.Substring(pos, 1)
+            f = CChar(tmp(0))
+            If mKeywords_endline.Contains(f) Then
+                EndLine = True
+                Exit While
+            End If
+
+            If mWord_Separator.Contains(f) Then
+                AddWord_Tolist(Words, CurrentWord)
+                AddWord_Tolist(Words, f)
+                CurrentWord = ""
+            Else
+                CurrentWord += f
+            End If
+
+        End While
+
+
+        AddWord_Tolist(Words, CurrentWord)
+
+        Return If(SkipFirst, Words.Skip(1).ToArray, Words)
+    End Function
+
+    Private Sub AddWord_Tolist(ByRef List() As String, word As String)
+        Dim ca As Char() = word.ToCharArray()
+        Array.Reverse(ca)
+        word = New [String](ca)
+
+        word = word.Trim().Replace(vbTab, "")
+
+        If String.IsNullOrEmpty(word) Then Exit Sub
+        If List Is Nothing Then
+            ReDim Preserve List(0)
+        Else
+            ReDim Preserve List(List.Count)
+        End If
+        List(List.Count - 1) = word
+    End Sub
+
+    Private Function CleanText(text As String) As String
+        text = System.Text.RegularExpressions.Regex.Replace(text, " {2,}", " ")
+        text = System.Text.RegularExpressions.Regex.Replace(text, " ?\, ?", ", ")
+        text = System.Text.RegularExpressions.Regex.Replace(text, " ?\( ?", "(")
+        text = System.Text.RegularExpressions.Regex.Replace(text, " ?\) ?", ") ")
+
+        'TODO do not work for removing last space at end line
+        'If text.Length > 1 AndAlso text(text.Length - 1) = vbLf Then
+        ' text = text.Substring(0, text.Length - 2).TrimEnd(" "c) & vbLf
+        'End If
+
+        '\s*\(\s*|\s*\)\s*
+        Return text
+    End Function
+
 End Class
