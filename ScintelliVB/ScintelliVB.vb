@@ -819,7 +819,7 @@ Public Class ScintelliVB
 
         If ArrayToLower(keywords_Modificator).Contains(LastWords(0).ToLower.TrimStart(New Char() {"("c, ")"c, ","c})) Then Return ""
         Dim InBracket As Boolean = False
-        For i As Integer = 0 To LastWords.Count - 1
+        For i As Integer = LastWords.Count - 1 To 0 Step -1
             If LastWords(i).ToLower.Contains("(") Then InBracket = True
             If LastWords(i).ToLower.Contains(")") Then InBracket = False
         Next
@@ -827,7 +827,14 @@ Public Class ScintelliVB
         If InBracket = True Then
             If LastWords(0) = "(" Then Return String.Join("?0 ", keywords_Modificator)
             If LastWords(0) = "," Then Return String.Join("?0 ", keywords_Modificator)
+        Else
+            For i As Integer = 0 To LastWords.Count - 1
+                If LastWords(i).ToLower = "sub" Then
+                    Return ""
+                End If
+            Next
         End If
+
 
         Return "As?0"
     End Function
