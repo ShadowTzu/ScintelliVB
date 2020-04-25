@@ -2,27 +2,51 @@
 Imports System.ComponentModel
 Imports System.Drawing
 Imports System.Windows.Forms
+Imports System.Text.RegularExpressions
 
 Public Class ScintelliVB
     Private mTextArea As Scintilla
+    Private Const CARET_MARKER As Integer = 0
 
-    Private mKeywords_vb As String = "AddHandler AddressOf Alias And AndAlso Ansi Append As Assembly Auto Binary ByRef ByVal Call Case Catch CBool CByte CChar CDate CDbl CInt Class CLng CObj Const Continue CSByte CShort CSng CStr CType CUInt CULng CUShort Declare Default Delegate Dim DirectCast Do Each Else ElseIf End EndIf Enum Erase Error Event Exit False Finally For Friend Function Get GetType GetXMLNamespace Global GoSub GoTo Handles If Implements Imports In Inherits Interface Is IsNot Let Lib Like Loop Me Mod Module MustInherit MustOverride MyBase MyClass Narrowing New Next Not Nothing NotInheritable NotOverridable Of On Operator Option Optional Or OrElse Out Overloads Overridable Overrides ParamArray Partial Private Property Protected Public RaiseEvent ReadOnly ReDim REM RemoveHandler Resume Return Select Set Shadows Shared Static Step Stop Structure Sub SyncLock Then Throw To True Try TryCast TypeOf Using Wend When While Widening With WithEvents WriteOnly Xor" ' #Const #Else #ElseIf #End #If (scintilla reject this)
-    Private mKeywords_As As String = "Boolean Byte Char Date Decimal Double Integer Long Object Plane SByte Short Single String UInteger ULong UShort Variant"
-    Private mkeywords_As_Array As String() = Split(mKeywords_As, " ")
+    Private ReadOnly mKeywords_vb As String = "AddHandler AddressOf Alias And AndAlso Ansi Append As Assembly Auto Binary ByRef ByVal Call Case Catch CBool CByte CChar CDate CDbl CInt Class CLng CObj Const Continue CSByte CShort CSng CStr CType CUInt CULng CUShort Declare Default Delegate Dim DirectCast Do Each Else ElseIf End EndIf Enum Erase Error Event Exit False Finally For Friend Function Get GetType GetXMLNamespace Global GoSub GoTo Handles If Implements Imports In Inherits Interface Is IsNot Let Lib Like Loop Me Mod Module MustInherit MustOverride MyBase MyClass Narrowing New Next Not Nothing NotInheritable NotOverridable Of On Operator Option Optional Or OrElse Out Overloads Overridable Overrides ParamArray Partial Private Property Protected Public RaiseEvent ReadOnly ReDim REM RemoveHandler Resume Return Select Set Shadows Shared Static Step Stop Structure Sub SyncLock Then Throw To True Try TryCast TypeOf Using Wend When While Widening With WithEvents WriteOnly Xor" ' #Const #Else #ElseIf #End #If (scintilla reject this)
+    Private ReadOnly mKeywords_As As String = "Boolean Byte Char Date Decimal Double Integer Long Object Plane SByte Short Single String UInteger ULong UShort Variant"
+    Private ReadOnly mkeywords_As_Array As String() = Split(mKeywords_As, " ")
     'Private keywords_As As String() = {"Boolean", "Byte", "Char", "Date", "Decimal", "Double", "Integer", "Long", "Object", "SByte", "Short", "Single", "String", "UInteger", "ULong", "UShort", "Variant"}
 
-    Private mAlphabet As String = "abcdefghijklmnopqrstuvwxyz"
-    Private mKeywords_vb_List() As String = Split(mKeywords_vb & " " & mKeywords_As, " ")
-    Private amKeywords_Complete As String
+    Private ReadOnly mAlphabet As String = "abcdefghijklmnopqrstuvwxyz"
+    Private ReadOnly mKeywords_vb_List() As String = Split(mKeywords_vb & " " & mKeywords_As, " ")
 
-    Private keywords_Acces As String() = {"Async", "Class", "Const", "Declare", "Default", "Delegate", "Dim", "Enum", "Event", "Friend", "Function", "Interface", "Iterator", "MustInherit", "MustOverride", "Narrowing", "NotInheritable", "NotOverridable", "Operator", "Overloads", "Overridable", "Overrides", "Partial", "Private", "Property", "Protected", "Public", "ReadOnly", "Shadows", "Shared", "Structure", "Sub", "Widening", "WithEvents", "WriteOnly"}
-    Private keywords_OutSide As String() = {"Class", "Delegate", "Enum", "Friend", "Imports", "Interface", "Module", "MustInherit", "Namespace", "NotInheritable", "Partial", "Public", "Shared", "Structure"}
+    Private ReadOnly keywords_Acces As String() = {"Async", "Class", "Const", "Declare", "Default", "Delegate", "Dim", "Enum", "Event", "Friend", "Function", "Interface", "Iterator", "MustInherit", "MustOverride", "Narrowing", "NotInheritable", "NotOverridable", "Operator", "Overloads", "Overridable", "Overrides", "Partial", "Private", "Property", "Protected", "Public", "ReadOnly", "Shadows", "Shared", "Structure", "Sub", "Widening", "WithEvents", "WriteOnly"}
+    Private ReadOnly keywords_OutSide As String() = {"Class", "Delegate", "Enum", "Friend", "Imports", "Interface", "Module", "MustInherit", "Namespace", "NotInheritable", "Partial", "Public", "Shared", "Structure"}
 
-    Private keywords_AccesProperty As String() = {"overloads", "overrides", "readOnly", "writeOnly"}
-    Private keywords_Statement As String() = {"addhandler", "class", "enum", "event", "function", "get", "if", "interface", "module", "namespace", "operator", "property", "raiseevent", "removehandler", "select", "set", "structure", "sub", "synclock", "try", "while", "with"}
-    Private keywords_Modificator As String() = {"ByRef", "Byval", "Optional", "ParamArray"}
-    Private mWord_Separator As Char() = {" "c, "."c, "("c, ")"c, ","c}
-    Private mKeywords_endline As String() = {vbCrLf, vbLf}
+    Private ReadOnly keywords_AccesProperty As String() = {"overloads", "overrides", "readOnly", "writeOnly"}
+    Private ReadOnly keywords_Statement As String() = {"addhandler", "class", "enum", "event", "function", "get", "if", "interface", "module", "namespace", "operator", "property", "raiseevent", "removehandler", "select", "set", "structure", "sub", "synclock", "try", "while", "with"}
+    Private ReadOnly keywords_Modificator As String() = {"ByRef", "Byval", "Optional", "ParamArray"}
+
+    'Private keywords_Block As String() = {"sub", "function", "class", "property", "structure"}
+
+    Private ReadOnly mWord_Separator As Char() = {" "c, "."c, "("c, ")"c, ","c}
+    Private ReadOnly mKeywords_endline As String() = {vbCrLf, vbLf}
+
+    Private Structure Struct_StateBlock
+        Public Start As String
+        Public [End] As String
+        Public [Type] As String
+    End Structure
+    Private Regex_StatementBlock As List(Of Struct_StateBlock)
+
+    Private Structure Struct_ResultBlock
+        Public [type] As String
+        Public Indentation As Integer
+        Public arguments As KeyValuePair(Of String, String) 'name, type
+        Public Sub New(Ident As Integer, BlockType As String)
+            Indentation = Ident
+            [type] = BlockType
+        End Sub
+
+    End Structure
+    Private mCurrentBlock As Struct_ResultBlock
+
 
     'Temp variable for test
     Public Property Text0 As String
@@ -31,7 +55,7 @@ Public Class ScintelliVB
     Public Property Text3 As String
     Public Property Text4 As String
 
-    Private AutoC_SelectedItem As String
+    'Private AutoC_SelectedItem As String
     Private AutoC_ValidatedBySpace As Boolean = False
     Private LastWordsEntered As String()
     Private KeyWordsSelected As String
@@ -42,6 +66,9 @@ Public Class ScintelliVB
 
         Init_Handle()
         Config()
+
+        Create_RegexStatement()
+
     End Sub
 
     Private Sub Init_Handle()
@@ -196,11 +223,18 @@ Public Class ScintelliVB
         Dim mKeywords_Complete As String = String.Join("?0 ", mKeywords_vb_List)
         mTextArea.SetKeywords(0, mKeywords_Complete.ToLower.Replace("?0", ""))
 
+
+        '0 = caret
+        '1 = errors marker (red)
+        '2 = search marker
         mTextArea.Markers(0).Symbol = MarkerSymbol.Background
-        mTextArea.Markers(0).SetBackColor(Color.DarkRed)
+        mTextArea.Markers(0).SetBackColor(Color.FromArgb(35, 35, 35))
 
         mTextArea.Markers(1).Symbol = MarkerSymbol.Background
-        mTextArea.Markers(1).SetBackColor(Color.FromArgb(255, 127, 106, 0))
+        mTextArea.Markers(1).SetBackColor(Color.DarkRed)
+
+        mTextArea.Markers(2).Symbol = MarkerSymbol.Background
+        mTextArea.Markers(2).SetBackColor(Color.FromArgb(255, 127, 106, 0))
 
         mTextArea.Indicators(8).Style = IndicatorStyle.StraightBox
         mTextArea.Indicators(8).Under = True
@@ -219,10 +253,7 @@ Public Class ScintelliVB
             .Sensitive = True
             .Mask = Marker.MaskFolders
         End With
-        For i As Integer = 25 To 31
-            mTextArea.Markers(i).SetForeColor(Color.FromArgb(30, 30, 30))
-            mTextArea.Markers(i).SetBackColor(Color.FromArgb(155, 155, 155))
-        Next
+
         mTextArea.Markers(Marker.Folder).Symbol = MarkerSymbol.BoxPlus
         mTextArea.Markers(Marker.FolderOpen).Symbol = MarkerSymbol.BoxMinus
         mTextArea.Markers(Marker.FolderEnd).Symbol = MarkerSymbol.BoxPlusConnected
@@ -232,12 +263,22 @@ Public Class ScintelliVB
         mTextArea.Markers(Marker.FolderTail).Symbol = MarkerSymbol.LCorner
         mTextArea.AutomaticFold = (AutomaticFold.Show Or AutomaticFold.Click Or AutomaticFold.Change)
 
+        'set color for all folding markers
+        For i As Integer = 25 To 31
+            mTextArea.Markers(i).SetForeColor(Color.FromArgb(30, 30, 30))
+            mTextArea.Markers(i).SetBackColor(Color.FromArgb(155, 155, 155))
+        Next
+
+        'end of line
         mTextArea.EolMode = Eol.CrLf
-        'mTextArea.AutoCSetFillUps(" "c)
+
+        'TextArea.AutoCSetFillUps(" "c)
+
         'image AutoComplete
         mTextArea.RegisterRgbaImage(0, My.Resources.keywords)
         'mTextArea.RegisterRgbaImage(1, New Bitmap(App.ImageList_Autocomplete.Images(1)))
 
+        'calltips style
         mTextArea.Styles(Style.CallTip).BackColor = Color.FromArgb(66, 66, 69)
         mTextArea.Styles(Style.CallTip).ForeColor = Color.FromArgb(255, 255, 255)
         mTextArea.Styles(Style.CallTip).Bold = True
@@ -602,7 +643,10 @@ Public Class ScintelliVB
     End Sub
 
     Public Sub UpdateUI(sender As Object, e As UpdateUIEventArgs)
-
+        mTextArea.MarkerDeleteAll(0)
+        Dim NewCaretPositionLine As Integer = mTextArea.LineFromPosition(mTextArea.CurrentPosition)
+        mCurrentBlock = SearchBlock(NewCaretPositionLine)
+        mTextArea.Lines(NewCaretPositionLine).MarkerAdd(CARET_MARKER)
     End Sub
 
     Public Sub Validated(sender As Object, e As EventArgs)
@@ -637,15 +681,15 @@ Public Class ScintelliVB
 
         'if return is pressed check previous line
         If e.Char = 13 Then
-            Replace_Line(mTextArea.CurrentLine - 1, UpperKeyWord(mTextArea.CurrentLine - 1))
+            Format_Line(mTextArea.CurrentLine - 1)
+            mTextArea.AddText(Create_Indentation(mCurrentBlock.Indentation * 2))
+
         End If
     End Sub
 
     Public Sub KeyDown(sender As Object, e As KeyEventArgs)
-
         If mTextArea.AutoCActive = False And e.Modifiers = 0 AndAlso (e.KeyCode = Keys.Left OrElse e.KeyCode = Keys.Right OrElse e.KeyCode = Keys.Up OrElse e.KeyCode = Keys.Down) Then
-            Replace_Line(mTextArea.CurrentLine, UpperKeyWord(mTextArea.CurrentLine))
-            Replace_Line(mTextArea.CurrentLine, CleanText(mTextArea.Lines(mTextArea.CurrentLine).Text))
+            Format_Line(mTextArea.CurrentLine)
         End If
     End Sub
 
@@ -656,12 +700,16 @@ Public Class ScintelliVB
         '    Exit Sub
         'End If
 
-        'validate intellisense with space
+        'validate intellisense with space (in some case, we don't need to validate with space
         If mTextArea.AutoCActive AndAlso e.KeyChar = " "c Then
-
             AutoC_ValidatedBySpace = True
             mTextArea.AutoCComplete()
         End If
+    End Sub
+
+    Private Sub Format_Line(Line As Integer)
+        Replace_Line(Line, UpperKeyWord(Line))
+        Replace_Line(Line, CleanText(mTextArea.Lines(Line).Text))
     End Sub
 
     Private Function UpperKeyWord(Line As Integer) As String
@@ -685,7 +733,7 @@ Public Class ScintelliVB
 
                 'special case
                 If i = Text.Length - 1 Then
-                    Word_End = i - 1
+                    Word_End = i '- 1
                 End If
             End If
 
@@ -723,6 +771,8 @@ Public Class ScintelliVB
         mTextArea.TargetEnd = mTextArea.Lines(Line).EndPosition
         mTextArea.ReplaceTarget(Text)
         mTextArea.GotoPosition(CursorPosition)
+        mTextArea.TargetStart = -1
+        mTextArea.TargetEnd = -1
     End Sub
 
     Private Sub IntelliSense(CharAdded As Integer)
@@ -753,12 +803,6 @@ Public Class ScintelliVB
             If (CharAdded = Keys.Space) Then Return String.Join(" ", keywords_Acces)
             Return ""
         End If
-
-        'test
-        Text0 = ""
-        For i As Integer = 0 To LastWords.Count - 1
-            Text0 &= LastWords(i) & " "
-        Next
 
         If ArrayToLower(mkeywords_As_Array).Contains(LastWords(0).ToLower) Then Return ""
         If LastWords.Count = 1 Then
@@ -828,7 +872,6 @@ Public Class ScintelliVB
 
         End While
 
-
         AddWord_Tolist(Words, CurrentWord)
 
         Return If(SkipFirst, Words.Skip(1).ToArray, Words)
@@ -857,6 +900,8 @@ Public Class ScintelliVB
         text = System.Text.RegularExpressions.Regex.Replace(text, " ?\) ?", ") ")
 
         'TODO do not work for removing last space at end line
+        ' text = System.Text.RegularExpressions.Regex.Replace(text, "\s+$", "" & vbLf)
+        '[^']end\s(sub|function|class|if).*
         'If text.Length > 1 AndAlso text(text.Length - 1) = vbLf Then
         ' text = text.Substring(0, text.Length - 2).TrimEnd(" "c) & vbLf
         'End If
@@ -865,4 +910,127 @@ Public Class ScintelliVB
         Return text
     End Function
 
+    Private Sub Create_RegexStatement()
+        Regex_StatementBlock = New List(Of Struct_StateBlock)
+        Dim CodeBLock As Struct_StateBlock
+        CodeBLock.Start = ".*(sub\s).*\([^']"
+        CodeBLock.End = "[\s|\t]*(end)\s+(sub)"
+        CodeBLock.Type = "sub"
+        Regex_StatementBlock.Add(CodeBLock)
+
+        CodeBLock.Start = ".*(function\s).*\([^']"
+        CodeBLock.End = "[\s|\t]*(end)\s+(function)"
+        CodeBLock.Type = "function"
+        Regex_StatementBlock.Add(CodeBLock)
+
+        CodeBLock.Start = "^(?!end).*(class).*"
+        CodeBLock.End = "[\s|\t]*(end)\s+(class)"
+        CodeBLock.Type = "class"
+        Regex_StatementBlock.Add(CodeBLock)
+
+        'TODO: do the same for other statement
+
+        CodeBLock.Start = "\s*if.*then\s*"
+        CodeBLock.End = "\s*end if\s*"
+        CodeBLock.Type = "if"
+        Regex_StatementBlock.Add(CodeBLock)
+    End Sub
+
+    Private Function SearchBlock(line As Integer) As Struct_ResultBlock
+        Text0 = "" 'TODO: remove
+
+        Dim CurrentLine As Integer = line
+        Dim CurrentEndLine As Integer = line '- 1
+        Dim EndBlockFounded As Boolean = False
+        Dim currentBlock As String = ""
+        Dim CurrentIndentation, Indentation As Integer
+        While CurrentLine > 0
+            For i As Integer = 0 To Regex_StatementBlock.Count - 1
+                If Regex.IsMatch(mTextArea.Lines(CurrentLine).Text, Regex_StatementBlock(i).Start, RegexOptions.IgnoreCase) Then
+                    CurrentIndentation = mTextArea.Lines(CurrentLine).Indentation
+                    'TODO: get arguments
+                    For j As Integer = CurrentLine + 1 To CurrentEndLine
+                        If Regex.IsMatch(mTextArea.Lines(j).Text, Regex_StatementBlock(i).End, RegexOptions.IgnoreCase) Then
+                            EndBlockFounded = True
+                            currentBlock = ""
+                            Exit For
+                        End If
+                    Next
+                    If EndBlockFounded = False Then
+                        currentBlock = Regex_StatementBlock(i).Type
+                        Indentation = CurrentIndentation
+                        'TODO: give arguments
+                        Exit While
+                    End If
+                    EndBlockFounded = False
+                End If
+            Next
+            CurrentLine -= 1
+        End While
+
+        If Not String.IsNullOrEmpty(currentBlock) AndAlso Indentation = 0 Then
+            Indentation = 2
+        End If
+
+        Dim Result As Struct_ResultBlock
+        Result.type = currentBlock
+        Result.Indentation = Indentation
+        Result.arguments = Nothing 'TODO: send arguments
+
+        Text0 = currentBlock 'TODO: remove
+        Text1 = Indentation.ToString 'TODO: remove
+
+        Return If(currentBlock = "", New Struct_ResultBlock(0, ""), Result)
+    End Function
+
+    Private Sub Add_Indicator_Line(Indicator As Integer, Line As Integer)
+        mTextArea.IndicatorCurrent = Indicator
+
+        mTextArea.TargetStart = mTextArea.Lines(Line).Position
+        mTextArea.TargetEnd = mTextArea.Lines(Line).EndPosition
+        mTextArea.IndicatorFillRange(mTextArea.TargetStart, mTextArea.TargetEnd - mTextArea.TargetStart)
+    End Sub
+
+    Private Sub Remove_Indicator_Line(Indicator As Integer, Line As Integer)
+        mTextArea.IndicatorCurrent = Indicator
+
+        mTextArea.TargetStart = mTextArea.Lines(Line).Position
+        mTextArea.TargetEnd = mTextArea.Lines(Line).EndPosition
+
+        mTextArea.IndicatorClearRange(mTextArea.TargetStart, mTextArea.TargetEnd - mTextArea.TargetStart)
+    End Sub
+
+    Private Function Create_Indentation(Size As Integer) As String
+        Dim IndentCount As Integer = Size \ mTextArea.IndentWidth
+
+        Dim IndentChar As String = ""
+        If mTextArea.UseTabs Then
+            IndentChar = vbTab
+        Else
+            IndentChar = " "
+        End If
+
+        Dim FinalIndent As String = ""
+        For i As Integer = 0 To IndentCount - 1
+            FinalIndent &= IndentChar
+        Next
+
+        Return FinalIndent
+    End Function
+
+    Private Function Create_Tabulation() As String
+        Dim spaceString As String = Nothing
+        Dim typeSpace As String
+        Dim Count As Integer = mTextArea.TabWidth
+        If mTextArea.UseTabs Then
+            typeSpace = vbTab
+            Count = 1
+        Else
+            typeSpace = " "
+        End If
+        For i As Integer = 0 To Count - 1
+            spaceString &= typeSpace
+        Next
+        Return spaceString
+    End Function
 End Class
