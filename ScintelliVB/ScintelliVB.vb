@@ -32,13 +32,14 @@ Public Class ScintelliVB
         Public Start As String
         Public [End] As String
         Public [Type] As String
+        Public Close As String
     End Structure
     Private Regex_StatementBlock As List(Of Struct_StateBlock)
 
     Private Structure Struct_ResultBlock
         Public [type] As String
         Public Indentation As Integer
-        Public arguments As KeyValuePair(Of String, String) 'name, type
+        Public arguments As KeyValuePair(Of String, String) 'name, type 
         Public Sub New(Ident As Integer, BlockType As String)
             Indentation = Ident
             [type] = BlockType
@@ -681,8 +682,11 @@ Public Class ScintelliVB
 
         'if return is pressed check previous line
         If e.Char = 13 Then
-            Format_Line(mTextArea.CurrentLine - 1)
-            mTextArea.AddText(Create_Indentation(mCurrentBlock.Indentation * 2))
+            Dim WorkingLine As Integer = mTextArea.CurrentLine - 1
+            Format_Line(WorkingLine)
+            If CloseBlock(WorkingLine) = False Then
+                mTextArea.AddText(Create_Indentation(mCurrentBlock.Indentation + mTextArea.IndentWidth))
+            End If
 
         End If
     End Sub
@@ -923,16 +927,19 @@ Public Class ScintelliVB
         CodeBLock.Start = ".*(sub\s).*\([^']"
         CodeBLock.End = "[\s|\t]*(end)\s+(sub)"
         CodeBLock.Type = "sub"
+        CodeBLock.Close = "End Sub"
         Regex_StatementBlock.Add(CodeBLock)
 
         CodeBLock.Start = ".*(function\s).*\([^']"
         CodeBLock.End = "[\s|\t]*(end)\s+(function)"
         CodeBLock.Type = "function"
+        CodeBLock.Close = "End Function"
         Regex_StatementBlock.Add(CodeBLock)
 
         CodeBLock.Start = "^(?!end).*(class).*"
         CodeBLock.End = "[\s|\t]*(end)\s+(class)"
         CodeBLock.Type = "class"
+        CodeBLock.Close = "End Class"
         Regex_StatementBlock.Add(CodeBLock)
 
         'TODO: do the same for other statement
@@ -940,14 +947,15 @@ Public Class ScintelliVB
         CodeBLock.Start = "\s*if.*then\s*"
         CodeBLock.End = "\s*end if\s*"
         CodeBLock.Type = "if"
+        CodeBLock.Close = "End If"
         Regex_StatementBlock.Add(CodeBLock)
     End Sub
 
-    Private Function SearchBlock(line As Integer) As Struct_ResultBlock
+    Private Function SearchBlock(Line As Integer) As Struct_ResultBlock
         Text0 = "" 'TODO: remove
 
-        Dim CurrentLine As Integer = line
-        Dim CurrentEndLine As Integer = line '- 1
+        Dim CurrentLine As Integer = Line
+        Dim CurrentEndLine As Integer = Line '- 1
         Dim EndBlockFounded As Boolean = False
         Dim currentBlock As String = ""
         Dim CurrentIndentation, Indentation As Integer
@@ -988,6 +996,28 @@ Public Class ScintelliVB
         Text1 = Indentation.ToString 'TODO: remove
 
         Return If(currentBlock = "", New Struct_ResultBlock(0, ""), Result)
+    End Function
+
+    Private Function CloseBlock(Line As Integer) As Boolean
+        '  Dim isClosed As Boolean = False
+        Dim Counter As Integer
+        For i As Integer = 0 To Regex_StatementBlock.Count - 1
+            If Regex.IsMatch(mTextArea.Lines(Line).Text, Regex_StatementBlock(i).Start, RegexOptions.IgnoreCase) Then
+                Counter = 1
+                For CheckLine As Integer = Line + 1 To mTextArea.Lines.Count - 1
+                    If Regex.IsMatch(mTextArea.Lines(CheckLine).Text, Regex_StatementBlock(i).End, RegexOptions.IgnoreCase) Then Counter -= 1
+
+                    If Regex.IsMatch(mTextArea.Lines(CheckLine).Text, Regex_StatementBlock(i).Start, RegexOptions.IgnoreCase) Then Counter += 1
+                Next
+                If Counter > 0 Then
+                    mTextArea.AddText(Create_Indentation(mTextArea.Lines(Line).Indentation + mTextArea.IndentWidth) & vbCrLf & Create_Indentation(mTextArea.Lines(Line).Indentation))
+                    mTextArea.AddText(Regex_StatementBlock(i).Close & vbCrLf)
+                    mTextArea.CurrentPosition = mTextArea.CurrentPosition - (5 + Regex_StatementBlock(i).Close.Length) ' mTextArea.Lines(Line).EndPosition
+                    Return True
+                End If
+            End If
+        Next
+        Return False
     End Function
 
     Private Sub Add_Indicator_Line(Indicator As Integer, Line As Integer)
