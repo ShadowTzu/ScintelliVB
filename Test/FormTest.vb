@@ -2,6 +2,7 @@
 Imports System.Reflection
 Imports ScintelliVB
 Imports ScintillaNET
+Imports System.Text.RegularExpressions
 
 Public Class FormTest
     Private DefaultScript_Text As String = "Imports Microsoft.VisualBasic" & vbCrLf & "Imports System.Math" & vbCrLf & vbCrLf & "Public Class {0}" & vbCrLf & vbCrLf & vbTab & "Sub New()" & vbCrLf & vbTab & vbTab & " MyBase.New(""{0}"")" & vbCrLf & vbTab & "End Sub" & vbCrLf & vbCrLf & vbTab & "public overrides sub start()" & vbCrLf & vbTab & vbTab & vbCrLf & vbTab & "End Sub" & vbCrLf & vbCrLf & vbTab & "Public Overrides Sub Update()" & vbCrLf & vbTab & vbTab & vbCrLf & vbTab & "End Sub" & vbCrLf & vbCrLf & vbTab & "Public Overrides Sub Destroy()" & vbCrLf & vbTab & vbTab & vbCrLf & vbTab & "End Sub" & vbCrLf & "End Class"
@@ -18,7 +19,7 @@ Public Class FormTest
         TextArea.Dock = DockStyle.Fill
 
         IntelliVB = New ScintelliVB.ScintelliVB(TextArea)
-
+        TimerText.Enabled = True
     End Sub
 
     Private Sub TimerText_Tick(sender As Object, e As EventArgs) Handles TimerText.Tick
@@ -28,4 +29,6 @@ Public Class FormTest
         TextBox_3.Text = IntelliVB.Text3
         TextBox_4.Text = IntelliVB.Text4
     End Sub
+
+
 End Class

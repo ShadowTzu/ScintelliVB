@@ -95,7 +95,6 @@ Partial Class FormTest
         '
         'TimerText
         '
-        Me.TimerText.Enabled = True
         Me.TimerText.Interval = 150
         '
         'FormTest
