@@ -824,6 +824,12 @@ Public Class ScintelliVB
         Dim LenEntered As Integer = CurrentPos - WordStartPos
 
         LastWordsEntered = GetLastWordWords(False)
+
+        If CharAdded = Asc(".") AndAlso Not LastWordsEntered Is Nothing Then
+            Dim variableType As String = Search_Type(mTextArea.CurrentPosition, LastWordsEntered)
+            Text3 = variableType
+        End If
+
         KeyWordsSelected = Keywords_Selector(LastWordsEntered, CharAdded)
         ' If LenEntered > 0 Then
         If Not String.IsNullOrEmpty(KeyWordsSelected) Then
@@ -838,6 +844,58 @@ Public Class ScintelliVB
             End If
         End If
     End Sub
+
+    Private Function Search_Type(CarretPosition As Integer, LastWords() As String) As String
+        Dim Variable As String = LastWords(1)
+
+        mTextArea.TargetStart = CarretPosition ' TextArea.TextLength
+        mTextArea.TargetEnd = 0
+        mTextArea.SearchFlags = SearchFlags.WholeWord
+
+        Dim PositionFound As Integer = mTextArea.SearchInTarget(Variable)
+
+        Dim currentLine As Integer = mTextArea.LineFromPosition(CarretPosition)
+
+        'mCurrentBlock.Start_Line
+        While PositionFound > -1
+            currentLine = mTextArea.LineFromPosition(PositionFound)
+
+            Dim check_line As String = mTextArea.Lines(currentLine).Text
+
+            'clean line
+            check_line = Trim(check_line.Replace(vbCr, "").Replace(vbLf, "").Replace("vbcrlf", "").Replace(vbTab, "")).ToLower
+
+            'if variable is declared in local
+            If currentLine >= mCurrentBlock.Start_Line - 1 AndAlso Regex.IsMatch(check_line, "(dim) (" & Variable.ToLower & ") (as)", RegexOptions.IgnoreCase) Then
+                Return Extract_Type(check_line)
+
+                'if variavble is declared in document
+            ElseIf Regex.IsMatch(check_line, "(public|private|friend|dim) (" & Variable.ToLower & ") (as)", RegexOptions.IgnoreCase) Then
+                Return Extract_Type(check_line)
+
+                'if is declared in the method
+            ElseIf currentLine >= mCurrentBlock.Start_Line - 1 AndAlso Regex.IsMatch(check_line, ".*(sub|function).+(" & Variable.ToLower & ")", RegexOptions.IgnoreCase) Then
+                Dim result As String = Regex.Match(check_line, "(\,|\()(byval|byref)*\s*(" & Variable.ToLower & ")(.*?)(as)(.*?)(\)|\,)", RegexOptions.IgnoreCase).Value
+                result = result.Replace("(", "").Replace(",", "").Replace(")", "")
+                Return Extract_Type(result)
+            End If
+
+            mTextArea.TargetStart = PositionFound - 1
+            mTextArea.TargetEnd = 0
+            PositionFound = mTextArea.SearchInTarget(Variable)
+        End While
+
+        'variable not found, can be a static (like Math.abs Regex... etc..)
+        Return Variable
+    End Function
+
+    Private Function Extract_Type(LineText As String) As String
+        Dim result As String = Trim(LineText.Substring(LineText.LastIndexOf(" "), LineText.Length - LineText.LastIndexOf(" ")))
+        Dim splitted As String() = result.Split("."c)
+        result = splitted(splitted.Count - 1)
+        Return result
+    End Function
+
     Private Function Keywords_Selector(LastWords() As String, CharAdded As Integer) As String
         Dim InBracket As Boolean = False
         If Not LastWords Is Nothing Then
@@ -879,7 +937,7 @@ Public Class ScintelliVB
                 Exit Select
 
             Case "function"
-                If LastWords(0).ToLower.TrimStart(New Char() {"("c, ")"c, ","c}) = "as" Then Return String.Join("?0 ", mkeywords_As_Array)
+                If Not LastWords Is Nothing AndAlso LastWords(0).ToLower.TrimStart(New Char() {"("c, ")"c, ","c}) = "as" Then Return String.Join("?0 ", mkeywords_As_Array)
 
             Case "function", "sub"
                 If CharAdded = Keys.Space Then
@@ -1005,7 +1063,7 @@ Public Class ScintelliVB
         End While
 
         AddWord_Tolist(Words, CurrentWord)
-
+        If Not Words Is Nothing Then Text1 = String.Join(" ", Words)
         Return If(SkipFirst, Words.Skip(1).ToArray, Words)
     End Function
 
