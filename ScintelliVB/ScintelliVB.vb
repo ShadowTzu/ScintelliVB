@@ -823,8 +823,8 @@ Public Class ScintelliVB
             End If
 
         End If
+
         If e.KeyCode = Keys.Back Then
-            'Dim ChatCurent As Integer = mTextArea.GetCharAt(mTextArea.CurrentPosition - 1)
             Dim charNext As Char = ChrW(mTextArea.GetCharAt(mTextArea.CurrentPosition))
             Dim charDeleted As String = ChrW(mTextArea.GetCharAt(mTextArea.CurrentPosition - 1))
             If charDeleted = "(" AndAlso charNext = ")"c Then
@@ -1005,8 +1005,9 @@ Public Class ScintelliVB
         If mSelectedCallTip < 0 Then mSelectedCallTip = 0
         If mSelectedCallTip > mCallTipsFound.Count - 1 Then mSelectedCallTip = mCallTipsFound.Count - 1
         Dim CurrentCallTips As String = mCallTipsFound(mSelectedCallTip)
+        Dim Arrowtext As String = Chr(1) & mSelectedCallTip + 1 & " of " & mCallTipsFound.Count & Chr(2)
         GetPositionArguement(CurrentCallTips)
-        mTextArea.CallTipShow(mTextArea.CurrentPosition - LastWordsEntered(1).Length, CurrentCallTips)
+        mTextArea.CallTipShow(mTextArea.CurrentPosition - LastWordsEntered(1).Length, Arrowtext & CurrentCallTips)
         CallTipsHighLight()
     End Sub
 
@@ -1014,7 +1015,8 @@ Public Class ScintelliVB
         If mTextArea.CallTipActive Then
             If mIndexCallTip < 0 Then mIndexCallTip = 0
             If mIndexCallTip <= mCallTipsPos.Count - 1 Then
-                mTextArea.CallTipSetHlt(mCallTipsPos(mIndexCallTip).Start, mCallTipsPos(mIndexCallTip).End)
+                Dim Arrowtext As String = Chr(1) & mSelectedCallTip + 1 & " of " & mCallTipsFound.Count & Chr(2)
+                mTextArea.CallTipSetHlt(mCallTipsPos(mIndexCallTip).Start + Arrowtext.Length, mCallTipsPos(mIndexCallTip).End + Arrowtext.Length)
             End If
         End If
     End Sub
