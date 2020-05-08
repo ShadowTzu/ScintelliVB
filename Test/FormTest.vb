@@ -2,7 +2,6 @@
 Imports System.Reflection
 Imports ScintelliVB
 Imports ScintillaNET
-Imports System.Text.RegularExpressions
 
 Public Class FormTest
     Private DefaultScript_Text As String = "Imports Microsoft.VisualBasic" & vbCrLf & "Imports System.Math" & vbCrLf & vbCrLf & "Public Class {0}" & vbCrLf & vbCrLf & vbTab & "Sub New()" & vbCrLf & vbTab & vbTab & " MyBase.New(""{0}"")" & vbCrLf & vbTab & "End Sub" & vbCrLf & vbCrLf & vbTab & "public overrides sub start()" & vbCrLf & vbTab & vbTab & vbCrLf & vbTab & "End Sub" & vbCrLf & vbCrLf & vbTab & "Public Overrides Sub Update()" & vbCrLf & vbTab & vbTab & vbCrLf & vbTab & "End Sub" & vbCrLf & vbCrLf & vbTab & "Public Overrides Sub Destroy()" & vbCrLf & vbTab & vbTab & vbCrLf & vbTab & "End Sub" & vbCrLf & "End Class"
