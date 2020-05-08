@@ -31,7 +31,8 @@ Public Class ScintelliVB
 
     Private mAssemblysCollection As List(Of String)
 
-    ' Private InternalChange As Boolean = False
+    Private FoundType As Struct_AutoComplete = Nothing
+
     Private Structure Struct_StateBlock
         Public Start As String
         Public [End] As String
@@ -58,6 +59,15 @@ Public Class ScintelliVB
         Public Parameters As Dictionary(Of String, String)
     End Structure
 
+    Private Structure Struct_CallTips
+        Public Start As Integer
+        Public [End] As Integer
+    End Structure
+    Private mCallTipsPos As List(Of Struct_CallTips)
+    Private mIndexCallTip As Integer = 0
+    Private mSelectedCallTip As Integer = 0
+    Private mCallTipsFound As New List(Of String)
+
     'Temp variable for test
     Public Property Text0 As String
     Public Property Text1 As String
@@ -73,9 +83,6 @@ Public Class ScintelliVB
     Public Sub New(TextArea As Scintilla)
         mTextArea = TextArea
 
-        For Each Ctrls As Control In mTextArea.Controls
-            Ctrls.BackColor = Color.Red
-        Next
         System.Array.Sort(mKeywords_vb_List)
 
         Init_Handle()
@@ -188,7 +195,7 @@ Public Class ScintelliVB
     End Sub
 
     Private Sub Config()
-        'check DO until DO loop FOR each, On Error GoTo ,  On Error Resume Next  
+        'TODO: check DO until DO loop FOR each, On Error GoTo ,  On Error Resume Next  
 
         mTextArea.WrapMode = ScintillaNET.WrapMode.None
         mTextArea.IndentationGuides = ScintillaNET.IndentView.LookBoth
@@ -322,6 +329,7 @@ Public Class ScintelliVB
         mTextArea.CallTipSetForeHlt(Color.FromArgb(86, 156, 214))
     End Sub
 
+#Region "Assemblies"
     Private Sub Init_Assembly()
         mAssemblysCollection = New List(Of String)
         For Each assembly As Assembly In AppDomain.CurrentDomain.GetAssemblies()
@@ -332,6 +340,12 @@ Public Class ScintelliVB
         Next
     End Sub
 
+    Public Sub Add_Assembly(Location As String)
+        If (Not String.IsNullOrEmpty(Location)) AndAlso (Not mAssemblysCollection.Contains(Location) AndAlso (Not IO.Path.GetExtension(Location).ToLower = ".exe")) Then
+            mAssemblysCollection.Add(Location)
+        End If
+    End Sub
+#End Region
     Private Sub Create_RegexStatement()
         Regex_StatementBlock = New List(Of Struct_StateBlock)
         Dim CodeBLock As Struct_StateBlock
@@ -409,6 +423,7 @@ Public Class ScintelliVB
 
     End Sub
 
+    'BeforeDelete is readOnly, we can't delete from here :'(
     Public Sub BeforeDelete(sender As Object, e As BeforeModificationEventArgs)
 
     End Sub
@@ -462,10 +477,6 @@ Public Class ScintelliVB
     End Sub
 
     Public Sub CursorChanged(sender As Object, e As EventArgs)
-
-    End Sub
-
-    Public Sub Delete(sender As Object, e As ModificationEventArgs)
 
     End Sub
 
@@ -798,6 +809,27 @@ Public Class ScintelliVB
             If (e.KeyCode = Keys.Left OrElse e.KeyCode = Keys.Right OrElse e.KeyCode = Keys.Up OrElse e.KeyCode = Keys.Down) Then
                 Format_Line(mTextArea.CurrentLine)
             End If
+
+            If mTextArea.CallTipActive Then
+                If e.KeyCode = Keys.PageDown Then
+                    mSelectedCallTip += 1
+                    UpdateCallTipsFromIndex()
+                    e.Handled = True
+                ElseIf e.KeyCode = Keys.PageUp Then
+                    mSelectedCallTip -= 1
+                    UpdateCallTipsFromIndex()
+                    e.Handled = True
+                End If
+            End If
+
+        End If
+        If e.KeyCode = Keys.Back Then
+            'Dim ChatCurent As Integer = mTextArea.GetCharAt(mTextArea.CurrentPosition - 1)
+            Dim charNext As Char = ChrW(mTextArea.GetCharAt(mTextArea.CurrentPosition))
+            Dim charDeleted As String = ChrW(mTextArea.GetCharAt(mTextArea.CurrentPosition - 1))
+            If charDeleted = "(" AndAlso charNext = ")"c Then
+                mTextArea.DeleteRange(mTextArea.CurrentPosition, 1)
+            End If
         End If
     End Sub
 
@@ -811,16 +843,21 @@ Public Class ScintelliVB
         'validate intellisense with space (in some case, we don't need to validate with space
         If mTextArea.AutoCActive AndAlso e.KeyChar = " "c Then
             AutoC_ValidatedBySpace = True
-            'e.KeyChar = CChar(vbNullChar)
+            'e.Handled = True
             mTextArea.AutoCComplete()
         End If
     End Sub
 
-    Private Sub Format_Line(Line As Integer)
-        Replace_Line(Line, UpperKeyWord(Line))
-        Replace_Line(Line, CleanText(mTextArea.Lines(Line).Text))
-        'Replace_Line (Line,Indentation(line))
+    Public Sub Delete(sender As Object, e As ModificationEventArgs)
+        If mTextArea.CallTipActive Then
+            If e.Text.Contains(",") Then
+                mIndexCallTip -= 1
+                CallTipsHighLight()
+            End If
+        End If
+
     End Sub
+
 #End Region
 
 #Region "Indentation"
@@ -886,7 +923,7 @@ Public Class ScintelliVB
                 'set first letter Uppercase if it's a keyword
                 Dim current_Word As String = Text.Substring(Word_Start, Word_End - Word_Start)
                 If IsKeyWord(current_Word) Then
-                    current_Word = current_Word(0).ToString.ToUpper & current_Word.Substring(1)
+                    current_Word = current_Word(0).ToString.ToUpper & current_Word.Substring(1).ToLower
                 End If
 
                 'reconstruct text
@@ -925,12 +962,34 @@ Public Class ScintelliVB
 
             If variableType = Variable Then IsStatic = True
 
-            Dim FoundType As Struct_AutoComplete = AutoComplete(variableType, IsStatic)
+            FoundType = AutoComplete(variableType, IsStatic)
             If Not String.IsNullOrEmpty(FoundType.Completion) Then
                 mTextArea.AutoCShow(LenEntered, FoundType.Completion)
                 Exit Sub
             End If
         End If
+        If CharAdded = AscW("("c) AndAlso Not FoundType.Parameters Is Nothing AndAlso FoundType.Parameters.Count > 0 Then
+            mIndexCallTip = 0
+            mSelectedCallTip = 0
+            mCallTipsFound.Clear()
+            If FoundType.Parameters.ContainsKey(LastWordsEntered(1)) Then
+
+                For Each Keys As String In FoundType.Parameters.Keys
+                    If Keys.ToLower = LastWordsEntered(1).ToLower Then
+                        Dim parameters() As String = Split(FoundType.Parameters(Keys), vbLf)
+                        For i As Integer = 0 To parameters.Count - 1
+                            mCallTipsFound.Add(parameters(i))
+                        Next
+                        Exit For
+                    End If
+                Next
+                UpdateCallTipsFromIndex()
+            End If
+        End If
+        If CharAdded = AscW(","c) Then
+            mIndexCallTip += 1
+        End If
+        CallTipsHighLight()
 
         KeyWordsSelected = Keywords_Selector(LastWordsEntered, CharAdded)
         If Not String.IsNullOrEmpty(KeyWordsSelected) Then
@@ -938,6 +997,24 @@ Public Class ScintelliVB
                 mTextArea.AutoCShow(LenEntered, KeyWordsSelected)
             ElseIf mTextArea.AutoCActive AndAlso Not LastWordsEntered Is Nothing AndAlso LastWordsEntered(0).ToLower.Contains("(") AndAlso Not mTextArea.CallTipActive Then
                 mTextArea.AutoCShow(LenEntered, KeyWordsSelected)
+            End If
+        End If
+    End Sub
+
+    Private Sub UpdateCallTipsFromIndex()
+        If mSelectedCallTip < 0 Then mSelectedCallTip = 0
+        If mSelectedCallTip > mCallTipsFound.Count - 1 Then mSelectedCallTip = mCallTipsFound.Count - 1
+        Dim CurrentCallTips As String = mCallTipsFound(mSelectedCallTip)
+        GetPositionArguement(CurrentCallTips)
+        mTextArea.CallTipShow(mTextArea.CurrentPosition - LastWordsEntered(1).Length, CurrentCallTips)
+        CallTipsHighLight()
+    End Sub
+
+    Private Sub CallTipsHighLight()
+        If mTextArea.CallTipActive Then
+            If mIndexCallTip < 0 Then mIndexCallTip = 0
+            If mIndexCallTip <= mCallTipsPos.Count - 1 Then
+                mTextArea.CallTipSetHlt(mCallTipsPos(mIndexCallTip).Start, mCallTipsPos(mIndexCallTip).End)
             End If
         End If
     End Sub
@@ -1151,6 +1228,38 @@ Public Class ScintelliVB
         Return result
     End Function
 
+    Private Sub GetPositionArguement(text As String)
+        If mCallTipsPos Is Nothing Then
+            mCallTipsPos = New List(Of Struct_CallTips)
+        Else
+            mCallTipsPos.Clear()
+        End If
+        Dim Searching As Boolean = True
+        Dim StartPos As Integer = text.IndexOf("(")
+        Dim EndPos As Integer = text.IndexOf(",")
+        If EndPos = -1 Then
+            EndPos = text.IndexOf(")", StartPos)
+            Searching = False
+        End If
+        Dim structPos As Struct_CallTips
+        structPos.Start = StartPos
+        structPos.End = EndPos
+        mCallTipsPos.Add(structPos)
+
+
+        While Searching
+            StartPos = mCallTipsPos(mCallTipsPos.Count - 1).End + 1
+            EndPos = text.IndexOf(",", StartPos)
+            If EndPos = -1 Then
+                Searching = False
+                EndPos = text.IndexOf(")", StartPos)
+            End If
+            structPos.Start = StartPos
+            structPos.End = EndPos
+            mCallTipsPos.Add(structPos)
+        End While
+    End Sub
+
     Private Function Keywords_Selector(LastWords() As String, CharAdded As Integer) As String
         Dim InBracket As Boolean = False
         If Not LastWords Is Nothing Then
@@ -1324,6 +1433,12 @@ Public Class ScintelliVB
 #End Region
 
 #Region "Text changer"
+    Private Sub Format_Line(Line As Integer)
+        Replace_Line(Line, UpperKeyWord(Line))
+        Replace_Line(Line, CleanText(mTextArea.Lines(Line).Text))
+        'Replace_Line (Line,Indentation(line))
+    End Sub
+
     Private Sub Replace_Line(Line As Integer, Text As String)
         ' If Text = vbCrLf Then Exit Sub
         Dim OriginalSize As Integer = mTextArea.Lines(Line).Text.Length
