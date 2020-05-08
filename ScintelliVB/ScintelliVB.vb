@@ -323,10 +323,14 @@ Public Class ScintelliVB
         'mTextArea.RegisterRgbaImage(1, New Bitmap(App.ImageList_Autocomplete.Images(1)))
 
         'calltips style
-        mTextArea.Styles(Style.CallTip).BackColor = Color.FromArgb(66, 66, 69)
+        mTextArea.Styles(Style.CallTip).BackColor = Color.FromArgb(66, 66, 66)
         mTextArea.Styles(Style.CallTip).ForeColor = Color.FromArgb(255, 255, 255)
         mTextArea.Styles(Style.CallTip).Bold = True
         mTextArea.CallTipSetForeHlt(Color.FromArgb(86, 156, 214))
+
+        mTextArea.MultipleSelection = True
+        mTextArea.MouseSelectionRectangularSwitch = True
+        mTextArea.AdditionalSelectionTyping = True
     End Sub
 
 #Region "Assemblies"
@@ -429,7 +433,7 @@ Public Class ScintelliVB
     End Sub
 
     Public Sub BeforeInsert(sender As Object, e As BeforeModificationEventArgs)
-        
+
     End Sub
 
     Public Sub BindingContextChanged(sender As Object, e As EventArgs)
@@ -778,9 +782,13 @@ Public Class ScintelliVB
     End Sub
 
     Public Sub CharAdded(sender As Object, e As CharAddedEventArgs)
+        'there are a multiple selection
+        If mTextArea.Selections.Count > 1 Then Exit Sub
+
         IntelliSense(e.Char)
-        'DoUndoCollection(False)
+
         InsertMatchedChars(e)
+
         'UpperCase first letter of keywords        
         Replace_Line(mTextArea.CurrentLine, UpperKeyWord(mTextArea.CurrentLine))
 
@@ -793,15 +801,12 @@ Public Class ScintelliVB
                 If Not String.IsNullOrWhiteSpace(mCurrentBlock.type) Then
                     If mTextArea.Lines(mTextArea.CurrentLine).Indentation <= mCurrentBlock.Indentation Then
                         mTextArea.AddText(Create_Indentation(mCurrentBlock.Indentation + mTextArea.IndentWidth))
-
                     End If
                 End If
 
             End If
 
         End If
-
-        ' DoUndoCollection(True)
     End Sub
 
     Public Sub KeyDown(sender As Object, e As KeyEventArgs)
@@ -855,9 +860,7 @@ Public Class ScintelliVB
                 CallTipsHighLight()
             End If
         End If
-
     End Sub
-
 #End Region
 
 #Region "Indentation"
@@ -952,8 +955,6 @@ Public Class ScintelliVB
         Dim CurrentPos As Integer = mTextArea.CurrentPosition
         Dim WordStartPos As Integer = mTextArea.WordStartPosition(CurrentPos, True)
         Dim LenEntered As Integer = CurrentPos - WordStartPos
-
-
 
         If CharAdded = AscW("."c) AndAlso Not LastWordsEntered Is Nothing Then
             Dim Variable As String = LastWordsEntered(1)
@@ -1144,45 +1145,32 @@ Public Class ScintelliVB
                 If charNext = AscW(")"c) Then
                     mTextArea.DeleteRange(caretPos, 1)
                     mTextArea.GotoPosition(caretPos)
-                    'mTextArea.InsertText(caretPos, ")")
                 End If
                 Exit Select
             Case AscW("}"c)
                 If charNext = AscW("}"c) Then
                     mTextArea.DeleteRange(caretPos, 1)
                     mTextArea.GotoPosition(caretPos)
-                    'mTextArea.InsertText(caretPos, ")")
                 End If
                 Exit Select
             Case AscW("]"c)
                 If charNext = AscW("]"c) Then
                     mTextArea.DeleteRange(caretPos, 1)
                     mTextArea.GotoPosition(caretPos)
-                    'mTextArea.InsertText(caretPos, ")")
                 End If
                 Exit Select
             Case AscW(""""c)
                 If charNext = AscW(""""c) Then
                     mTextArea.DeleteRange(caretPos, 1)
                     mTextArea.GotoPosition(caretPos)
-                    'mTextArea.InsertText(caretPos, ")")
                 End If
                 Exit Select
-                'Case Asc("'"c)
-
-                '    If charPrev = &H27 AndAlso charNext = &H27 Then
-                '        mTextArea.DeleteRange(caretPos, 1)
-                '        mTextArea.GotoPosition(caretPos)
-                '        Return
-                '    End If
-
-                '    If isCharOrString Then mTextArea.InsertText(caretPos, "'")
         End Select
     End Sub
 
     Private Function Search_Type(CarretPosition As Integer, Variable As String) As String
 
-        mTextArea.TargetStart = CarretPosition ' TextArea.TextLength
+        mTextArea.TargetStart = CarretPosition
         mTextArea.TargetEnd = 0
         mTextArea.SearchFlags = SearchFlags.WholeWord
 
@@ -1639,3 +1627,4 @@ Public Class ScintelliVB
 #End Region
 
 End Class
+
