@@ -12,6 +12,7 @@ ScintelliVB is a small class that allows you to add Intellisense functionality t
 - Folding
 - Multiple selections
 
+![ScintelliVB gif features](https://zupimages.net/up/20/19/xzvz.gif)
 ## Usage
 
 ```vb
