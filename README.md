@@ -20,12 +20,12 @@ Imports ScintelliVB
 '..
 Private WithEvents TextArea As Scintilla
 '..
-TextArea = New ScintillaNET.Scintilla With {
+TextArea = New Scintilla With {
          .Name = "TextArea"
 }
 TextArea.Dock = DockStyle.Fill
 Me.Controls.Add(TextArea)
-IntelliVB = New ScintelliVB.ScintelliVB(TextArea)
+IntelliVB = New Scintelli(TextArea)
 ```
 
 ## Contributing
