@@ -85,7 +85,7 @@ Public Class ScintelliVB
         Method = 1
         [Property] = 2
         Member = 3
-        Assembly = 4
+        [Namespace] = 4
         [Enum] = 5
         [Class] = 6
         [Structure] = 7
@@ -331,7 +331,7 @@ Public Class ScintelliVB
         mTextArea.RegisterRgbaImage(IndexType.Method, My.Resources.methods)
         mTextArea.RegisterRgbaImage(IndexType.Property, My.Resources.properties)
         mTextArea.RegisterRgbaImage(IndexType.Member, My.Resources.members)
-        mTextArea.RegisterRgbaImage(IndexType.Assembly, My.Resources.Assemblies)
+        mTextArea.RegisterRgbaImage(IndexType.Namespace, My.Resources.Namespaces)
         mTextArea.RegisterRgbaImage(IndexType.Enum, My.Resources.enums)
         mTextArea.RegisterRgbaImage(IndexType.Class, My.Resources.classes)
         mTextArea.RegisterRgbaImage(IndexType.Structure, My.Resources.structures)
@@ -971,7 +971,7 @@ Public Class ScintelliVB
         Dim WordStartPos As Integer = mTextArea.WordStartPosition(CurrentPos, True)
         Dim LenEntered As Integer = CurrentPos - WordStartPos
 
-        If CharAdded = AscW("."c) AndAlso Not LastWordsEntered Is Nothing Then
+        If CharAdded = AscW("."c) AndAlso Not LastWordsEntered Is Nothing AndAlso LastWordsEntered.Count > 1 Then
             Dim Variable As String = LastWordsEntered(1)
             Dim variableType As String = Search_Type(mTextArea.CurrentPosition, Variable)
             Dim IsStatic As Boolean = False
@@ -1053,38 +1053,41 @@ Public Class ScintelliVB
             Dim assembly_File As String = mAssemblysCollection(i)
             ' If Exclude_Assembly(assembly_File) = False Then Continue For
 
+            'load assembly
             Dim Assemblies As Reflection.Assembly = Reflection.Assembly.LoadFile(assembly_File)
             Dim name As AssemblyName = Assemblies.GetName(True)
 
             Dim types() As Type = Assemblies.GetTypes
             For j As Integer = 0 To types.Count - 1
+                'we dont want private member or generic
                 If types(j).IsPublic = False Then Continue For
                 If types(j).IsGenericTypeDefinition = True Then Continue For
 
-                Dim posName As Integer = types(j).FullName.IndexOf(VariableType.ToLower & ".", StringComparison.OrdinalIgnoreCase)
-                Dim AssemblyPath As String = Nothing
+                If Not types(j).FullName Is Nothing AndAlso types(j).FullName.ToLower.Contains(VariableType.ToLower & ".") Then
 
-                If posName > -1 Then
-                    Dim Str As String = VariableType.ToLower & "."
-                    Dim LenStr As Integer = Str.Length
-                    AssemblyPath = types(j).FullName.Substring(posName + LenStr)
-                Else
-                    If types(j).FullName.ToLower.Contains(VariableType.ToLower & ".") Then
-                        AssemblyPath = types(j).FullName
+                    Dim AssemblyPath As String = Nothing
+
+                    'if fullname start with VariableType & "."
+                    Dim posName As Integer = types(j).FullName.IndexOf(VariableType.ToLower & ".", StringComparison.OrdinalIgnoreCase)
+                    If posName > -1 Then
+                        AssemblyPath = types(j).FullName.Substring(posName + (VariableType.ToLower & ".").Length)
                     Else
-                        AssemblyPath = "."
+                        If types(j).FullName.ToLower.Contains(VariableType.ToLower & ".") Then
+                            AssemblyPath = types(j).FullName
+                        Else
+                            AssemblyPath = "."
+                        End If
+
                     End If
 
-                End If
-
-                If Not types(j).FullName Is Nothing AndAlso types(j).FullName.ToLower.Contains(VariableType.ToLower & ".") Then
                     Dim assemblyName As String = Split(AssemblyPath, ".")(0)
                     assemblyName = Split(assemblyName, ".")(0)
 
                     Dim AddMe As Boolean = True
                     For r As Integer = 0 To result.Count - 1
+                        'if there are already something it's probably a Namespace
                         If result(r).StartsWith(assemblyName & "?") Then
-                            result(r) = assemblyName & "?" & IndexType.Assembly
+                            result(r) = assemblyName & "?" & IndexType.Namespace
                             AddMe = False
                             Exit For
                         End If
@@ -1137,7 +1140,6 @@ Public Class ScintelliVB
                     Next
 
                     For Each m As MemberInfo In types(j).GetMembers(bindStatic)
-
                         If (Not m.Name.StartsWith("get_")) AndAlso (Not m.Name.StartsWith("set_")) AndAlso (Not m.Name.StartsWith("op_")) Then
                             If Not result.Contains(m.Name & "?" & IndexType.Member) Then
                                 result.Add(m.Name & "?" & IndexType.Member)
@@ -1160,7 +1162,7 @@ Public Class ScintelliVB
         If T.IsEnum Then Return IndexType.Enum
         If T.IsClass Then Return IndexType.Class
         If T.IsLayoutSequential Then Return IndexType.Structure
-        Return IndexType.Assembly
+        Return IndexType.Namespace
     End Function
 
     Private Sub InsertMatchedChars(ByVal e As CharAddedEventArgs)
