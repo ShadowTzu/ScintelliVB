@@ -5,7 +5,7 @@ Imports System.Windows.Forms
 Imports System.Text.RegularExpressions
 Imports System.Reflection
 
-Public Class ScintelliVB
+Public Class Scintelli
     Private mTextArea As Scintilla
     Private Const CARET_MARKER As Integer = 0
 
