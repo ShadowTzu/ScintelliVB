@@ -2,15 +2,15 @@
 
 ScintelliVB is a small class that allows you to add Intellisense functionality to a project using ScintillaNET with Visual Basic.NET
 
-## Feature
+## Features
 - Uppercase first letter of keywords
 - AutoIndentation
 - AutoCompletion
-- Intellisense (search in local/global variables and in namespace)
+- Intellisense (search in local/global variables and in namespaces)
 - Call tips (overloads supported)
 - Auto close block (Class, Sub, Function, If)
 - Folding
-- Multiple selection
+- Multiple selections
 
 ## Usage
 
