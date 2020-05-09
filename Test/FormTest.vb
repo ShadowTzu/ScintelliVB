@@ -16,7 +16,7 @@ Public Class FormTest
         Me.SplitContainer1.Panel2.Controls.Add(TextArea)
         TextArea.Text = String.Format(DefaultScript_Text, "Test")
         TextArea.Dock = DockStyle.Fill
-        Me.Controls.Add(TextArea)
+
         IntelliVB = New Scintelli(TextArea)
         TimerText.Enabled = True
     End Sub
