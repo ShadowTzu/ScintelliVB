@@ -1323,22 +1323,22 @@ Public Class ScintelliVB
             Case ""
                 If CharAdded = Keys.Space Then
                     If (IsEmptyText(mTextArea.Lines(mTextArea.CurrentLine).Text)) AndAlso (LastWords Is Nothing OrElse LastWords.Count = 0) Then
-                        Return String.Join(" ", keywords_OutSide)
+                        Return String.Join("?0 ", keywords_OutSide)
                     End If
                 End If
                 If Not LastWords Is Nothing AndAlso LastWords.Count = 1 AndAlso Not LastWords(0).ToLower = "imports" Then
-                    Return String.Join(" ", keywords_OutSide)
+                    Return String.Join("?0 ", keywords_OutSide)
                 End If
                 Exit Select
 
             Case "class"
                 If CharAdded = Keys.Space Then
                     If (IsEmptyText(mTextArea.Lines(mTextArea.CurrentLine).Text)) AndAlso (LastWords Is Nothing OrElse LastWords.Count = 0) Then
-                        Return String.Join(" ", keywords_Acces)
+                        Return String.Join("?0 ", keywords_Acces)
                     End If
                 End If
                 If Not LastWords Is Nothing AndAlso LastWords.Count = 1 Then
-                    Return String.Join(" ", keywords_Acces)
+                    Return String.Join("?0 ", keywords_Acces)
                 End If
 
                 If InBracket = True Then
@@ -1356,7 +1356,7 @@ Public Class ScintelliVB
             Case "function", "sub"
                 If CharAdded = Keys.Space Then
                     If (IsEmptyText(mTextArea.Lines(mTextArea.CurrentLine).Text)) AndAlso (LastWords Is Nothing OrElse LastWords.Count = 0) Then
-                        Return String.Join(" ", keywords_Method)
+                        Return String.Join("?0 ", keywords_Method)
                     End If
                 End If
 
