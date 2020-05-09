@@ -80,6 +80,17 @@ Public Class ScintelliVB
     Private LastWordsEntered As String()
     Private KeyWordsSelected As String
 
+    Private Enum IndexType
+        keyword = 0
+        Method = 1
+        [Property] = 2
+        Member = 3
+        Assembly = 4
+        [Enum] = 5
+        [Class] = 6
+        [Structure] = 7
+    End Enum
+
     Public Sub New(TextArea As Scintilla)
         mTextArea = TextArea
 
@@ -316,11 +327,15 @@ Public Class ScintelliVB
         'TextArea.AutoCSetFillUps(" "c)
 
         'image AutoComplete
-        mTextArea.RegisterRgbaImage(0, My.Resources.keywords)
-        mTextArea.RegisterRgbaImage(1, My.Resources.methods)
-        mTextArea.RegisterRgbaImage(2, My.Resources.properties)
-        mTextArea.RegisterRgbaImage(3, My.Resources.methods)
-        'mTextArea.RegisterRgbaImage(1, New Bitmap(App.ImageList_Autocomplete.Images(1)))
+        mTextArea.RegisterRgbaImage(IndexType.keyword, My.Resources.keywords)
+        mTextArea.RegisterRgbaImage(IndexType.Method, My.Resources.methods)
+        mTextArea.RegisterRgbaImage(IndexType.Property, My.Resources.properties)
+        mTextArea.RegisterRgbaImage(IndexType.Member, My.Resources.members)
+        mTextArea.RegisterRgbaImage(IndexType.Assembly, My.Resources.Assemblies)
+        mTextArea.RegisterRgbaImage(IndexType.Enum, My.Resources.enums)
+        mTextArea.RegisterRgbaImage(IndexType.Class, My.Resources.classes)
+        mTextArea.RegisterRgbaImage(IndexType.Structure, My.Resources.structures)
+
 
         'calltips style
         mTextArea.Styles(Style.CallTip).BackColor = Color.FromArgb(66, 66, 66)
@@ -845,8 +860,8 @@ Public Class ScintelliVB
     End Sub
 
     Public Sub KeyPress(sender As Object, e As KeyPressEventArgs)
-        'validate intellisense with space (in some case, we don't need to validate with space
-        If mTextArea.AutoCActive AndAlso e.KeyChar = " "c Then
+        'TODO: validate intellisense with space and dot (in some case, we don't need to validate with space or dot
+        If mTextArea.AutoCActive AndAlso (e.KeyChar = " "c OrElse e.KeyChar = "."c) Then
             AutoC_ValidatedBySpace = True
             'e.Handled = True
             mTextArea.AutoCComplete()
@@ -962,7 +977,7 @@ Public Class ScintelliVB
             Dim IsStatic As Boolean = False
 
             If variableType = Variable Then IsStatic = True
-
+            If mTextArea.AutoCActive Then mTextArea.AutoCCancel()
             FoundType = AutoComplete(variableType, IsStatic)
             If Not String.IsNullOrEmpty(FoundType.Completion) Then
                 mTextArea.AutoCShow(LenEntered, FoundType.Completion)
@@ -1026,8 +1041,10 @@ Public Class ScintelliVB
         If String.IsNullOrWhiteSpace(VariableType) Then Return Nothing
 
         VariableType = ToRealType(VariableType)
+
         Dim FinalStruct As Struct_AutoComplete = Nothing
         FinalStruct.Parameters = New Dictionary(Of String, String)
+
         Dim bindStatic As BindingFlags = BindingFlags.Instance
         If isStatic Then bindStatic = BindingFlags.Static
 
@@ -1041,16 +1058,51 @@ Public Class ScintelliVB
 
             Dim types() As Type = Assemblies.GetTypes
             For j As Integer = 0 To types.Count - 1
+                If types(j).IsPublic = False Then Continue For
+                If types(j).IsGenericTypeDefinition = True Then Continue For
+
+                Dim posName As Integer = types(j).FullName.IndexOf(VariableType.ToLower & ".", StringComparison.OrdinalIgnoreCase)
+                Dim AssemblyPath As String = Nothing
+
+                If posName > -1 Then
+                    Dim Str As String = VariableType.ToLower & "."
+                    Dim LenStr As Integer = Str.Length
+                    AssemblyPath = types(j).FullName.Substring(posName + LenStr)
+                Else
+                    If types(j).FullName.ToLower.Contains(VariableType.ToLower & ".") Then
+                        AssemblyPath = types(j).FullName
+                    Else
+                        AssemblyPath = "."
+                    End If
+
+                End If
+
+                If Not types(j).FullName Is Nothing AndAlso types(j).FullName.ToLower.Contains(VariableType.ToLower & ".") Then
+                    Dim assemblyName As String = Split(AssemblyPath, ".")(0)
+                    assemblyName = Split(assemblyName, ".")(0)
+
+                    Dim AddMe As Boolean = True
+                    For r As Integer = 0 To result.Count - 1
+                        If result(r).StartsWith(assemblyName & "?") Then
+                            result(r) = assemblyName & "?" & IndexType.Assembly
+                            AddMe = False
+                            Exit For
+                        End If
+                    Next
+                    If AddMe = True Then
+                        result.Add(assemblyName & "?" & GetTypeIndex(types(j)).ToString)
+                    End If
+                End If
+
                 If types(j).Name.ToLower = VariableType.ToLower Then
                     For Each p As PropertyInfo In types(j).GetProperties()
-                        If Not result.Contains(p.Name & "?2") Then
-                            'If p.GetAccessors(True)(0).IsStatic Then Continue For
-                            result.Add(p.Name & "?2")
+                        If Not result.Contains(p.Name & "?" & IndexType.Property) Then
+                            result.Add(p.Name & "?" & IndexType.Property)
                         End If
                     Next
 
                     For Each m As MethodInfo In types(j).GetMethods()
-                        If (m.IsStatic = isStatic) AndAlso (Not m.Name.StartsWith("get_")) AndAlso (Not m.Name.StartsWith("set_")) AndAlso (Not m.Name.StartsWith("op_")) Then ' AndAlso (Not result.Contains(m.Name & "?0") AndAlso Not result.Contains(m.Name & "?1"))
+                        If (m.IsStatic = isStatic) AndAlso (Not m.Name.StartsWith("get_")) AndAlso (Not m.Name.StartsWith("set_")) AndAlso (Not m.Name.StartsWith("op_")) Then
                             Dim StrPara As String = m.Name & "("
                             Dim parameters() As ParameterInfo = m.GetParameters
                             For k As Integer = 0 To parameters.Count - 1
@@ -1077,8 +1129,8 @@ Public Class ScintelliVB
                             Else
                                 FinalStruct.Parameters.Add(m.Name, StrPara)
                             End If
-                            If Not result.Contains(m.Name & "?1") Then
-                                result.Add(m.Name & "?1")
+                            If Not result.Contains(m.Name & "?" & IndexType.Method) Then
+                                result.Add(m.Name & "?" & IndexType.Method)
                             End If
 
                         End If
@@ -1086,11 +1138,10 @@ Public Class ScintelliVB
 
                     For Each m As MemberInfo In types(j).GetMembers(bindStatic)
 
-                        If (Not m.Name.StartsWith("get_")) AndAlso (Not m.Name.StartsWith("set_")) AndAlso (Not m.Name.StartsWith("op_")) Then '(Not result.Contains(m.Name & "?0") AndAlso Not result.Contains(m.Name & "?1")) AndAlso 
-                            If Not result.Contains(m.Name & "?3") Then
-                                result.Add(m.Name & "?3")
+                        If (Not m.Name.StartsWith("get_")) AndAlso (Not m.Name.StartsWith("set_")) AndAlso (Not m.Name.StartsWith("op_")) Then
+                            If Not result.Contains(m.Name & "?" & IndexType.Member) Then
+                                result.Add(m.Name & "?" & IndexType.Member)
                             End If
-
                         End If
                     Next
                 End If
@@ -1103,6 +1154,13 @@ Public Class ScintelliVB
         result = Nothing
         FinalStruct.Completion = Trim(OutText)
         Return FinalStruct
+    End Function
+
+    Private Function GetTypeIndex(T As Type) As Integer
+        If T.IsEnum Then Return IndexType.Enum
+        If T.IsClass Then Return IndexType.Class
+        If T.IsLayoutSequential Then Return IndexType.Structure
+        Return IndexType.Assembly
     End Function
 
     Private Sub InsertMatchedChars(ByVal e As CharAddedEventArgs)
