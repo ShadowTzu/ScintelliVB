@@ -371,6 +371,12 @@ Public Class Scintelli
         Dim CodeBLock As Struct_StateBlock
 
         'Inside block (If, For, Do) need to be added before sub/function
+        CodeBLock.Start = "\s*for\s+.*to"
+        CodeBLock.End = "\Wnext\W"
+        CodeBLock.Type = "for"
+        CodeBLock.Close = "Next"
+        Regex_StatementBlock.Add(CodeBLock)
+
         CodeBLock.Start = "\s*if.*then\s\W"
         'CodeBLock.Start = "\s*if.*then\s*"
         CodeBLock.End = "\s*end if\s*"
@@ -1362,7 +1368,7 @@ Public Class Scintelli
             Case "function"
                 If Not LastWords Is Nothing AndAlso LastWords(0).ToLower.TrimStart(New Char() {"("c, ")"c, ","c}) = "as" Then Return String.Join("?0 ", mkeywords_As_Array)
 
-            Case "function", "sub", "if"
+            Case "function", "sub", "if", "for"
                 If CharAdded = Keys.Space Then
                     If (IsEmptyText(mTextArea.Lines(mTextArea.CurrentLine).Text)) AndAlso (LastWords Is Nothing OrElse LastWords.Count = 0) Then
                         Return String.Join("?0 ", mKeywords_Method)
