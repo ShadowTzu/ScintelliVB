@@ -56,6 +56,13 @@ Public Class Scintelli
     Private Structure Struct_AutoComplete
         Public Completion As String
         Public Parameters As Dictionary(Of String, String)
+        Public Function ReturnedType(Parameter As String) As String
+            If Parameter Is Nothing OrElse Not Parameters.ContainsKey(Parameter) Then Return Nothing
+            Dim CurrentParameter As String = Parameters(Parameter)
+            Dim endString As Integer = CurrentParameter.LastIndexOf(")"c)
+            Dim result As String = Trim(CurrentParameter.Substring(endString + 1).Replace("As ", ""))
+            Return result
+        End Function
     End Structure
 
     Private Structure Struct_CallTips
@@ -232,13 +239,11 @@ Public Class Scintelli
         mTextArea.Styles(Style.Vb.Keyword2).ForeColor = Color.FromArgb(86, 156, 214)
         mTextArea.Styles(Style.Vb.Number).ForeColor = Color.FromArgb(181, 206, 168)
         mTextArea.Styles(Style.Vb.String).ForeColor = Color.FromArgb(217, 157, 133)
+        mTextArea.Styles(Style.Vb.StringEol).ForeColor = Color.FromArgb(217, 157, 133)
         mTextArea.Styles(Style.Vb.Operator).ForeColor = Color.FromArgb(180, 180, 180)
 
         mTextArea.Styles(Style.LineNumber).BackColor = Color.FromArgb(30, 30, 30)
         mTextArea.Styles(Style.LineNumber).ForeColor = Color.FromArgb(43, 145, 175)
-
-        mTextArea.Styles(Style.Vb.StringEol).BackColor = Color.FromArgb(40, 40, 40)
-        mTextArea.Styles(Style.Vb.StringEol).ForeColor = Color.FromArgb(30, 30, 30)
 
         mTextArea.SetFoldMarginColor(True, Color.FromArgb(30, 30, 30))
         mTextArea.SetFoldMarginHighlightColor(True, Color.FromArgb(30, 30, 30))
@@ -872,6 +877,12 @@ Public Class Scintelli
     End Sub
 
     Public Sub KeyPress(sender As Object, e As KeyPressEventArgs)
+        'remove special char (CTRL+Key, etc...)
+        If (AscW(e.KeyChar) < 32 AndAlso AscW(e.KeyChar) > 13 OrElse AscW(e.KeyChar) < 8) Then
+            e.Handled = True
+            Exit Sub
+        End If
+
         'TODO: validate intellisense with space and dot (in some case, we don't need to validate with space or dot
         If mTextArea.AutoCActive AndAlso (e.KeyChar = " "c OrElse e.KeyChar = "."c) Then
             AutoC_ValidatedBySpace = True
@@ -880,12 +891,12 @@ Public Class Scintelli
     End Sub
 
     Public Sub Delete(sender As Object, e As ModificationEventArgs)
-        If mTextArea.CallTipActive Then
-            If e.Text.Contains(",") Then
-                mIndexCallTip -= 1
-                CallTipsHighLight()
-            End If
+        'If mTextArea.CallTipActive Then
+        If e.Text = (",") Then
+            mIndexCallTip -= 1
+            CallTipsHighLight()
         End If
+        ' End If
     End Sub
 #End Region
 
@@ -990,22 +1001,23 @@ Public Class Scintelli
             For i As Integer = 0 To LastWordsEntered.Count - 1
                 If LastWordsEntered(i).StartsWith("'") Then Exit Sub
             Next
-
         End If
 
         If CharAdded = AscW("."c) AndAlso Not LastWordsEntered Is Nothing AndAlso LastWordsEntered.Count > 1 Then
             Dim Variable As String = LastWordsEntered(1)
-            Dim variableType As String = Search_Type(mTextArea.CurrentPosition, Variable)
+            Dim VariableFound As Boolean
+            Dim variableType As String = Search_Type(mTextArea.CurrentPosition, Variable, VariableFound)
             Dim IsStatic As Boolean = False
-
             If variableType = Variable Then IsStatic = True
+
             If mTextArea.AutoCActive Then mTextArea.AutoCCancel()
-            FoundType = AutoComplete(variableType, IsStatic)
+            FoundType = AutoComplete(variableType, IsStatic, 1)
             If Not String.IsNullOrEmpty(FoundType.Completion) Then
                 mTextArea.AutoCShow(LenEntered, FoundType.Completion)
                 Exit Sub
             End If
         End If
+
         If CharAdded = AscW("("c) AndAlso Not FoundType.Parameters Is Nothing AndAlso FoundType.Parameters.Count > 0 Then
             mIndexCallTip = 0
             mSelectedCallTip = 0
@@ -1030,6 +1042,11 @@ Public Class Scintelli
         CallTipsHighLight()
 
         KeyWordsSelected = Keywords_Selector(LastWordsEntered, CharAdded)
+        Dim VariableExist As Boolean = False
+        Dim SearchVariable As String = If(LastWordsEntered Is Nothing, ChrW(CharAdded), LastWordsEntered(0))
+        Search_Type(mTextArea.CurrentPosition, SearchVariable, VariableExist)
+        If VariableExist = True Then Exit Sub
+
         If Not String.IsNullOrEmpty(KeyWordsSelected) Then
             If Not mTextArea.AutoCActive AndAlso Not mTextArea.CallTipActive Then
                 mTextArea.AutoCShow(LenEntered, KeyWordsSelected)
@@ -1040,6 +1057,7 @@ Public Class Scintelli
     End Sub
 
     Private Sub UpdateCallTipsFromIndex()
+        If mCallTipsFound.Count = 0 Then Exit Sub
         If mSelectedCallTip < 0 Then mSelectedCallTip = 0
         If mSelectedCallTip > mCallTipsFound.Count - 1 Then mSelectedCallTip = mCallTipsFound.Count - 1
         Dim CurrentCallTips As String = mCallTipsFound(mSelectedCallTip)
@@ -1059,7 +1077,8 @@ Public Class Scintelli
         End If
     End Sub
 
-    Private Function AutoComplete(VariableType As String, isStatic As Boolean) As Struct_AutoComplete
+    Private Function AutoComplete(VariableType As String, isStatic As Boolean, CurrentWordIndex As Integer, Optional ByRef BypassSearch As Boolean = False, Optional ByRef ReturnedValue As Struct_AutoComplete = Nothing) As Struct_AutoComplete
+        If BypassSearch = True Then Return ReturnedValue
         If String.IsNullOrWhiteSpace(VariableType) Then Return Nothing
 
         VariableType = ToRealType(VariableType)
@@ -1171,6 +1190,46 @@ Public Class Scintelli
                 End If
             Next
         Next
+
+        'it's can be a class
+        If result.Count = 0 Then
+            'get last word (before dot)
+            Dim IsNotWord As Boolean = True
+            Dim previous_Index As Integer = CurrentWordIndex
+            Dim previous_word As String = ""
+
+            While IsNotWord
+                If previous_Index > LastWordsEntered.Count - 1 Then Return Nothing
+
+                previous_word = LastWordsEntered(previous_Index)
+                For w As Integer = 0 To previous_word.Count - 1
+                    'if it's a word
+                    If mAlphabet.Contains(previous_word.ToLower()(w)) Then
+                        IsNotWord = False
+                        Exit For
+                    End If
+                Next
+                previous_Index += 1
+            End While
+
+            Dim PrevVariableFound As Boolean = False
+            Dim PrevVariableType As String = Search_Type(mTextArea.CurrentPosition, previous_word, PrevVariableFound)
+            Dim PrevIsStatic As Boolean = False
+
+            If PrevVariableType = previous_word Then PrevIsStatic = True
+            Dim FoundClass As Struct_AutoComplete = AutoComplete(PrevVariableType, PrevIsStatic, previous_Index, BypassSearch, ReturnedValue)
+
+            If String.IsNullOrEmpty(FoundClass.Completion) Then Return Nothing
+
+            Dim returnedType As String = FoundClass.ReturnedType(VariableType)
+            Dim FinalFound As Struct_AutoComplete = AutoComplete(returnedType, False, previous_Index, BypassSearch, ReturnedValue)
+            If Not String.IsNullOrEmpty(FinalFound.Completion) AndAlso Not String.IsNullOrEmpty(returnedType) Then
+                BypassSearch = True
+                ReturnedValue = FinalFound
+            End If
+            Return FinalFound
+        End If
+
         result.Sort()
         Dim OutText As String = String.Join(" ", result)
 
@@ -1214,7 +1273,6 @@ Public Class Scintelli
                 mTextArea.InsertText(caretPos, "]")
                 Exit Select
             Case AscW(""""c)
-
                 If charPrev = &H22 AndAlso charNext = &H22 Then
                     mTextArea.DeleteRange(caretPos, 1)
                     mTextArea.GotoPosition(caretPos)
@@ -1250,8 +1308,17 @@ Public Class Scintelli
         End Select
     End Sub
 
-    Private Function Search_Type(CarretPosition As Integer, Variable As String) As String
+    Private Function Search_Type(CarretPosition As Integer, Variable As String, ByRef Founded As Boolean) As String
+        Dim IsNotWord As Boolean = True
+        For w As Integer = 0 To Variable.Count - 1
+            If mAlphabet.Contains(Variable.ToLower()(w)) Then
+                IsNotWord = False
+                Exit For
+            End If
+        Next
+        If IsNotWord = True Then Return Variable
 
+        Founded = False
         mTextArea.TargetStart = CarretPosition
         mTextArea.TargetEnd = 0
         mTextArea.SearchFlags = SearchFlags.WholeWord
@@ -1270,16 +1337,19 @@ Public Class Scintelli
 
             'if variable is declared in local
             If currentLine >= mCurrentBlock.Start_Line - 1 AndAlso Regex.IsMatch(check_line, "(dim) (" & Variable.ToLower & ") (as)", RegexOptions.IgnoreCase) Then
+                Founded = True
                 Return Extract_Type(check_line)
 
                 'if variavble is declared in document
             ElseIf Regex.IsMatch(check_line, "(public|private|friend|dim) (" & Variable.ToLower & ") (as)", RegexOptions.IgnoreCase) Then
+                Founded = True
                 Return Extract_Type(check_line)
 
                 'if is declared in the method
             ElseIf currentLine >= mCurrentBlock.Start_Line - 1 AndAlso Regex.IsMatch(check_line, ".*(sub|function).+(" & Variable.ToLower & ")", RegexOptions.IgnoreCase) Then
                 Dim result As String = Regex.Match(check_line, "(\,|\()(byval|byref)*\s*(" & Variable.ToLower & ")(.*?)(as)(.*?)(\)|\,)", RegexOptions.IgnoreCase).Value
                 result = result.Replace("(", "").Replace(",", "").Replace(")", "")
+                Founded = True
                 Return Extract_Type(result)
             End If
 
@@ -1287,7 +1357,6 @@ Public Class Scintelli
             mTextArea.TargetEnd = 0
             PositionFound = mTextArea.SearchInTarget(Variable)
         End While
-
         'variable not found, can be a static (like Math.Abs Regex.Match etc..)
         'TODO: can be a class, need to handle that !
         Return Variable
@@ -1452,18 +1521,18 @@ Public Class Scintelli
     End Function
 
     Private Function ToRealType(VariableType As String) As String
-        Select Case VariableType
+        Select Case VariableType.ToLower()
             Case "integer"
                 Return "Int32"
-            Case "UInteger"
+            Case "uinteger"
                 Return "UInt32"
             Case "long"
                 Return "Int64"
-            Case "Ulong"
+            Case "ulong"
                 Return "UInt64"
-            Case "Short"
+            Case "short"
                 Return "Int16"
-            Case "UShort"
+            Case "ushort"
                 Return "UInt16"
             Case Else
                 Return VariableType
