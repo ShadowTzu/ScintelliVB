@@ -984,6 +984,15 @@ Public Class Scintelli
         Dim WordStartPos As Integer = mTextArea.WordStartPosition(CurrentPos, True)
         Dim LenEntered As Integer = CurrentPos - WordStartPos
 
+        If CharAdded = AscW("'") Then
+            Exit Sub
+        ElseIf Not LastWordsEntered Is Nothing Then
+            For i As Integer = 0 To LastWordsEntered.Count - 1
+                If LastWordsEntered(i).StartsWith("'") Then Exit Sub
+            Next
+
+        End If
+
         If CharAdded = AscW("."c) AndAlso Not LastWordsEntered Is Nothing AndAlso LastWordsEntered.Count > 1 Then
             Dim Variable As String = LastWordsEntered(1)
             Dim variableType As String = Search_Type(mTextArea.CurrentPosition, Variable)
